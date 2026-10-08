@@ -579,6 +579,28 @@
   font-size: 17px;
   margin-bottom: 13px;
 }
+.schedule-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 13px;
+}
+.bottom-lists .schedule-head h2 {
+  margin: 0;
+}
+.schedule-head .schedule-label {
+  margin: 0;
+  white-space: nowrap;
+}
+.bottom-lists .schedule-days {
+  gap: 2px;
+}
+.bottom-lists .schedule-days button {
+  font-size: 13px;
+  padding: 0 6px;
+  height: 28px;
+}
 .schedule-label {
   color: var(--muted-foreground);
   font-size: 11px;

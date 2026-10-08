@@ -472,8 +472,10 @@ export function AnimeHome() {
                 status="finished"
               />
               <section className="schedule">
-                <p className="schedule-label">THIS WEEK</p>
-                <h2>Airing schedule</h2>
+                <div className="schedule-head">
+                  <h2>Airing schedule</h2>
+                  <p className="schedule-label">THIS WEEK</p>
+                </div>
                 <div className="schedule-days">
                   {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
                     <Button
