@@ -8,3 +8,6 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Keep the anime catalog in a browser-safe data module and homepage interactions in focused UI components; the portfolio homepage needs no server or streaming service.
+- Store anime artwork as project asset pointers and import generated featured artwork directly; this keeps media reliable without external image hotlinks.
