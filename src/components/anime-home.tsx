@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   Bookmark,
@@ -15,7 +15,6 @@ import {
   Play,
   Search,
   Shuffle,
-  Sparkles,
   Star,
   Subtitles,
   X,
@@ -105,7 +104,7 @@ function AnimeList({
   return (
     <section className="list-section">
       <h2 className="section-heading">
-        {icon === "flame" ? <Flame /> : icon === "sparkles" ? <Sparkles /> : <ChevronRight />}
+        {icon === "flame" ? <Flame /> : <ChevronRight />}
         {title}
       </h2>
       <div className="rank-list">
@@ -167,6 +166,8 @@ export function AnimeHome() {
   const [moreSchedule, setMoreSchedule] = useState(false);
   const catalogRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const genreRef = useRef<HTMLDivElement>(null);
+  const [genreEdges, setGenreEdges] = useState({ start: true, end: false });
   const featured = featuredIds
     .map((id) => animeCatalog.find((a) => a.id === id))
     .filter((a): a is Anime => Boolean(a));
@@ -197,6 +198,20 @@ export function AnimeHome() {
     catalogRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     setMenuOpen(false);
   }
+  function measureGenres() {
+    const el = genreRef.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    setGenreEdges({ start: el.scrollLeft <= 2, end: el.scrollLeft >= max - 2 });
+  }
+  function scrollGenres(dir: number) {
+    genreRef.current?.scrollBy({ left: dir * 320, behavior: "smooth" });
+  }
+  useEffect(() => {
+    measureGenres();
+    window.addEventListener("resize", measureGenres);
+    return () => window.removeEventListener("resize", measureGenres);
+  }, []);
   const scheduleItems = animeCatalog.slice(
     day === "Thu" ? 0 : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(day),
     moreSchedule ? 12 : 6,
@@ -521,7 +536,6 @@ export function AnimeHome() {
             />
             <AnimeList
               title="On the horizon"
-              icon="sparkles"
               items={animeCatalog.slice(6, 12)}
               onSelect={setSelected}
               status="upcoming"
