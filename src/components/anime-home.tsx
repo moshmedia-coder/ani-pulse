@@ -524,6 +524,7 @@ export function AnimeHome() {
               onSelect={setSelected}
               status="upcoming"
             />
+          </aside>
         </div>
         <footer className="site-footer">
           <div className="footer-top">
