@@ -306,20 +306,35 @@
   background: var(--primary);
   width: 23px;
 }
+.genre-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+}
 .genre-bar {
   display: flex;
   align-items: center;
   gap: 9px;
   overflow: auto;
-  padding: 20px 0;
-  border-bottom: 1px solid var(--border);
+  flex: 1;
+  min-width: 0;
   scrollbar-width: none;
+}
+.genre-bar::-webkit-scrollbar {
+  display: none;
 }
 .genre-bar button {
   font-size: 11px;
   height: 34px;
   flex-shrink: 0;
   padding: 0 19px;
+}
+.genre-arrow {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
 }
 .content-layout {
   display: grid;
