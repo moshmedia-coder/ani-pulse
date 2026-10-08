@@ -362,27 +362,46 @@ export function AnimeHome() {
             ))}
           </div>
         </section>
-        <div className="genre-bar" aria-label="Genres">
-          {genres.map((g) => (
-            <Button
-              key={g}
-              variant={genre === g ? "default" : "secondary"}
-              onClick={() => {
-                setGenre(g);
-                setPage(1);
-                browse();
-              }}
-            >
-              {g}
-            </Button>
-          ))}
+        <div className="genre-bar-wrap">
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
-            aria-label="More genres"
-            onClick={(e) =>
-              e.currentTarget.parentElement?.scrollBy({ left: 300, behavior: "smooth" })
-            }
+            className="genre-arrow"
+            aria-label="Scroll genres left"
+            title="Scroll genres left"
+            disabled={genreEdges.start}
+            onClick={() => scrollGenres(-1)}
+          >
+            <ChevronLeft />
+          </Button>
+          <div
+            className="genre-bar"
+            ref={genreRef}
+            aria-label="Genres"
+            onScroll={measureGenres}
+          >
+            {genres.map((g) => (
+              <Button
+                key={g}
+                variant={genre === g ? "default" : "secondary"}
+                onClick={() => {
+                  setGenre(g);
+                  setPage(1);
+                  browse();
+                }}
+              >
+                {g}
+              </Button>
+            ))}
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            className="genre-arrow"
+            aria-label="Scroll genres right"
+            title="Scroll genres right"
+            disabled={genreEdges.end}
+            onClick={() => scrollGenres(1)}
           >
             <ChevronRight />
           </Button>
