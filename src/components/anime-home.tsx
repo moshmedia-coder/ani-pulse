@@ -524,43 +524,6 @@ export function AnimeHome() {
               onSelect={setSelected}
               status="upcoming"
             />
-            <section className="schedule">
-              <p className="schedule-label">THIS WEEK</p>
-              <h2>Airing schedule</h2>
-              <div className="schedule-days">
-                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    key={d}
-                    className={d === day ? "selected" : ""}
-                    onClick={() => setDay(d)}
-                  >
-                    {d}
-                  </Button>
-                ))}
-              </div>
-              <p className="schedule-date">
-                {day}, October {5 + ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(day)}{" "}
-                · Times in UTC
-              </p>
-              {scheduleItems.map((a, i) => (
-                <div className="schedule-row" key={a.id}>
-                  <time>{String(14 + i).padStart(2, "0")}:30</time>
-                  <span>{a.title}</span>
-                  <em>EP {i + 1}</em>
-                </div>
-              ))}
-              <Button
-                variant="ghost"
-                className="list-more"
-                onClick={() => setMoreSchedule(!moreSchedule)}
-              >
-                {moreSchedule ? "Show less" : "Full schedule"}
-                <ArrowRight />
-              </Button>
-            </section>
-          </aside>
         </div>
         <footer className="site-footer">
           <div className="footer-top">
