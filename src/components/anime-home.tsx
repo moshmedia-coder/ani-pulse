@@ -167,7 +167,7 @@ export function AnimeHome() {
   const catalogRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const genreRef = useRef<HTMLDivElement>(null);
-  const [genreEdges, setGenreEdges] = useState({ start: true, end: false });
+  const [genreEdges, setGenreEdges] = useState({ start: true, end: false, overflow: false });
   const featured = featuredIds
     .map((id) => animeCatalog.find((a) => a.id === id))
     .filter((a): a is Anime => Boolean(a));
@@ -202,7 +202,11 @@ export function AnimeHome() {
     const el = genreRef.current;
     if (!el) return;
     const max = el.scrollWidth - el.clientWidth;
-    setGenreEdges({ start: el.scrollLeft <= 2, end: el.scrollLeft >= max - 2 });
+    setGenreEdges({
+      start: el.scrollLeft <= 2,
+      end: el.scrollLeft >= max - 2,
+      overflow: max > 2,
+    });
   }
   function scrollGenres(dir: number) {
     genreRef.current?.scrollBy({ left: dir * 320, behavior: "smooth" });
