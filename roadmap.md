@@ -5,5 +5,5 @@
 - [x] Move Airing Schedule below Just Finished and Top Movies, which now sit side by side.
 - [x] Add left/right arrows to scroll the genres row and drop the sparkles icon from On the horizon.
 - [x] Give every button the green hover colour, including list rows, tabs, day tabs, and carousel arrows.
-- [ ] Add Anime Award beside Airing schedule with verified award-winning anime.
-- [ ] Auto-rotate featured anime with fade-in/out and verify both homepage updates.
+- [x] Add Anime Award beside Airing schedule with verified award-winning anime.
+- [x] Auto-rotate featured anime with fade-in/out and verify both homepage updates.
