@@ -367,17 +367,19 @@ export function AnimeHome() {
           </div>
         </section>
         <div className="genre-bar-wrap">
-          <Button
-            variant="outline"
-            size="icon"
-            className="genre-arrow"
-            aria-label="Scroll genres left"
-            title="Scroll genres left"
-            disabled={genreEdges.start}
-            onClick={() => scrollGenres(-1)}
-          >
-            <ChevronLeft />
-          </Button>
+          {genreEdges.overflow && (
+            <Button
+              variant="outline"
+              size="icon"
+              className="genre-arrow"
+              aria-label="Scroll genres left"
+              title="Scroll genres left"
+              disabled={genreEdges.start}
+              onClick={() => scrollGenres(-1)}
+            >
+              <ChevronLeft />
+            </Button>
+          )}
           <div
             className="genre-bar"
             ref={genreRef}
@@ -398,17 +400,19 @@ export function AnimeHome() {
               </Button>
             ))}
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            className="genre-arrow"
-            aria-label="Scroll genres right"
-            title="Scroll genres right"
-            disabled={genreEdges.end}
-            onClick={() => scrollGenres(1)}
-          >
-            <ChevronRight />
-          </Button>
+          {genreEdges.overflow && (
+            <Button
+              variant="outline"
+              size="icon"
+              className="genre-arrow"
+              aria-label="Scroll genres right"
+              title="Scroll genres right"
+              disabled={genreEdges.end}
+              onClick={() => scrollGenres(1)}
+            >
+              <ChevronRight />
+            </Button>
+          )}
         </div>
         <div className="content-layout">
           <div>
