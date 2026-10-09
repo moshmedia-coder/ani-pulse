@@ -12,6 +12,7 @@ import {
   Flame,
   Info,
   Menu,
+  Pause,
   Play,
   Search,
   Shuffle,
@@ -21,7 +22,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { animeCatalog, type Anime } from "@/lib/anime-data";
+import { animeCatalog, animeAwards, type Anime } from "@/lib/anime-data";
+import { useFeaturedCarousel } from "@/components/use-featured-carousel";
 import heroImage from "@/assets/frieren-hero.jpg";
 
 export function Brand() {
@@ -156,7 +158,6 @@ export function AnimeHome() {
   const [genre, setGenre] = useState("All genres");
   const [tab, setTab] = useState("Newest");
   const [page, setPage] = useState(1);
-  const [slide, setSlide] = useState(0);
   const [selected, setSelected] = useState<Anime | null>(null);
   const [saved, setSaved] = useState<number[]>([]);
   const [bookmarked, setBookmarked] = useState(false);
@@ -171,6 +172,10 @@ export function AnimeHome() {
   const featured = featuredIds
     .map((id) => animeCatalog.find((a) => a.id === id))
     .filter((a): a is Anime => Boolean(a));
+  const { slide, fading, paused, move, togglePaused } = useFeaturedCarousel(
+    featured.length,
+    selected !== null || menuOpen,
+  );
   const current = featured[slide] ?? animeCatalog[0];
   const filtered = useMemo(() => {
     let list = animeCatalog.filter(
@@ -307,13 +312,17 @@ export function AnimeHome() {
       </header>
       <main className="main-wrap">
         <section className="hero" aria-label="Featured anime">
-          <img
-            className="hero-image"
-            src={slide === 0 ? heroImage : current.image}
-            alt={slide === 0 ? "Frieren in a mountain valley" : current.title}
-            width={1920}
-            height={1024}
-          />
+          {featured.map((anime, index) => (
+            <img
+              key={anime.id}
+              className={`hero-image ${slide === index ? "is-active" : ""}`}
+              src={index === 0 ? heroImage : anime.image}
+              alt={index === 0 ? "Frieren in a mountain valley" : anime.title}
+              aria-hidden={slide !== index}
+              width={1920}
+              height={1024}
+            />
+          ))}
           <div className="hero-top">
             <span className="feature-label">
               <Flame size={14} /> IN THE SPOTLIGHT
@@ -323,8 +332,18 @@ export function AnimeHome() {
                 size="icon"
                 variant="outline"
                 className="icon-control"
+                aria-label={paused ? "Resume featured anime" : "Pause featured anime"}
+                title={paused ? "Resume slideshow" : "Pause slideshow"}
+                onClick={togglePaused}
+              >
+                {paused ? <Play /> : <Pause />}
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                className="icon-control"
                 aria-label="Previous featured anime"
-                onClick={() => setSlide((slide + featured.length - 1) % featured.length)}
+                onClick={() => move(-1)}
               >
                 <ChevronLeft />
               </Button>
@@ -336,13 +355,13 @@ export function AnimeHome() {
                 variant="outline"
                 className="icon-control"
                 aria-label="Next featured anime"
-                onClick={() => setSlide((slide + 1) % featured.length)}
+                onClick={() => move(1)}
               >
                 <ChevronRight />
               </Button>
             </div>
           </div>
-          <div className="hero-content">
+          <div key={current.id} className={`hero-content ${fading ? "is-fading" : ""}`}>
             <div className="eyebrow">
               <span className="status-dot" />
               {slide === 0 ? "A JOURNEY BEYOND THE END" : "YOUR NEXT GREAT ADVENTURE"}
@@ -551,6 +570,31 @@ export function AnimeHome() {
                   {moreSchedule ? "Show less" : "Full schedule"}
                   <ArrowRight />
                 </Button>
+              </section>
+              <section className="list-section awards-section" aria-label="Anime Award">
+                <h2 className="section-heading"><ChevronRight />Anime Award</h2>
+                <div className="rank-list">
+                  {animeAwards.map((award) => {
+                    const anime = animeCatalog.find((item) => item.id === award.animeId);
+                    if (!anime) return null;
+                    return (
+                      <Button
+                        key={anime.id}
+                        variant="ghost"
+                        className="rank-item award-item"
+                        aria-label={`Details for ${anime.title}, ${award.recognition}`}
+                        onClick={() => setSelected(anime)}
+                      >
+                        <img src={anime.image} alt="" loading="lazy" width={63} height={90} />
+                        <div className="rank-body">
+                          <div className="rank-title"><span className="status-dot upcoming" /><span className="name">{anime.title}</span></div>
+                          <p className="award-recognition">{award.recognition}</p>
+                          <span className="award-year">{award.year}</span>
+                        </div>
+                      </Button>
+                    );
+                  })}
+                </div>
               </section>
             </div>
           </div>

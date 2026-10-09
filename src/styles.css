@@ -164,6 +164,15 @@
   object-fit: cover;
   object-position: center 44%;
   position: absolute;
+  opacity: 0;
+  transition: opacity 650ms ease-in-out;
+}
+.hero-image.is-active {
+  opacity: 1;
+}
+@keyframes featured-content-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .hero::after {
   content: "";
@@ -224,6 +233,11 @@
   left: 38px;
   width: 54%;
   max-width: 610px;
+  animation: featured-content-in 650ms ease-in-out;
+  transition: opacity 300ms ease-in-out;
+}
+.hero-content.is-fading {
+  opacity: 0;
 }
 .eyebrow {
   color: var(--primary);
@@ -579,10 +593,33 @@
 }
 .bottom-lists {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 22px;
   margin-top: 35px;
   align-items: start;
+}
+.bottom-lists > section {
+  min-width: 0;
+}
+.award-item {
+  height: 110px;
+}
+.award-item img {
+  height: 110px;
+  width: 76px;
+}
+.award-item .rank-title {
+  margin-bottom: 5px;
+}
+.award-recognition {
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 0;
+  color: var(--gold);
+}
+.award-year {
+  color: var(--muted-foreground);
+  font-size: 10px;
 }
 .schedule {
   margin-top: 30px;
@@ -759,9 +796,6 @@
   .bottom-lists {
     grid-template-columns: 1fr 1fr;
   }
-  .bottom-lists .schedule {
-    grid-column: 1 / -1;
-  }
 }
 @media (max-width: 760px) {
   .site-header {
@@ -845,7 +879,6 @@
     margin-top: 15px;
   }
   .schedule {
-    grid-column: 1/-1;
     margin-top: 0;
   }
   .bottom-lists {

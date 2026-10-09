@@ -32,6 +32,33 @@ export interface Anime {
   description: string;
 }
 
+export const animeAwards = [
+  {
+    animeId: 199,
+    recognition: "Academy Awards · Best Animated Feature",
+    year: 2003,
+    source: "https://www.oscars.org/oscars/ceremonies/2003",
+  },
+  {
+    animeId: 40748,
+    recognition: "Crunchyroll Anime Awards · Anime of the Year",
+    year: 2021,
+    source: "https://www.ign.com/articles/crunchyrolls-anime-awards-winners-announced",
+  },
+  {
+    animeId: 32281,
+    recognition: "Sitges · Anima’t Best Feature Film",
+    year: 2016,
+    source: "https://sitgesfilmfestival.com/en/festival/historia/2016/awards",
+  },
+  {
+    animeId: 37510,
+    recognition: "Japan Academy Film Prize · Animation of the Year",
+    year: 2020,
+    source: "https://www.japan-academy-prize.jp/news/index_news2020.php",
+  },
+];
+
 export const animeCatalog: Anime[] = [
   {
     id: 52991,
