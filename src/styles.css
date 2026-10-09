@@ -932,3 +932,25 @@
     transition: none !important;
   }
 }
+
+/* Green hover states for buttons that carry custom classes */
+.rank-item:hover {
+  background: color-mix(in oklab, var(--primary) 12%, var(--card));
+  color: var(--primary);
+}
+.catalog-tabs button:hover {
+  color: var(--primary);
+}
+.catalog-tabs button[data-active="true"]:hover {
+  background: color-mix(in oklab, var(--primary) 18%, var(--accent));
+}
+.schedule-days button:hover {
+  color: var(--primary);
+}
+.schedule-days button.selected:hover {
+  background: color-mix(in oklab, var(--primary) 18%, var(--accent));
+}
+.hero-controls .icon-control:hover {
+  background: color-mix(in oklab, var(--primary) 25%, var(--overlay));
+  color: var(--primary);
+}
