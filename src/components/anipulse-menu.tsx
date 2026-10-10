@@ -20,7 +20,7 @@ export function AniPulseMenu({ open, onOpenChange, onNavigate, paused, togglePau
       </nav>
       <div className="menu-bottom">
         {settings && <div className="menu-settings"><h3>Preferences</h3><Button variant="outline" onClick={togglePaused} aria-pressed={!paused}>{!paused && <Check />} Auto-play featured anime</Button><p>Dark appearance</p></div>}
-        <div className="menu-status"><span><i /> All systems online</span><span className="menu-version">v1.0.0</span></div>
+        <div className="menu-status"><span><i /> Portfolio edition</span><span className="menu-version">v1.0.0</span></div>
         <div className="menu-appearance"><Monitor size={19} /><span>Dark</span><Check size={16} /></div>
         <div className="menu-profile"><Button variant="ghost" onClick={() => onNavigate("Watchlist")}><UserRound /> My collection <small>{savedCount}</small></Button><Button variant="outline" size="icon" title="Preferences" aria-label="Preferences" onClick={() => setSettings(!settings)} aria-expanded={settings}><Settings /></Button></div>
       </div>
