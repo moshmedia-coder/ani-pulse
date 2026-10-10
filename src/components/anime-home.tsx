@@ -25,23 +25,14 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { animeCatalog, animeAwards, type Anime } from "@/lib/anime-data";
 import { useFeaturedCarousel } from "@/components/use-featured-carousel";
 import heroImage from "@/assets/frieren-hero.jpg";
+import soloHero from "@/assets/solo-leveling-hero.jpg";
+import demonHero from "@/assets/demon-slayer-hero.jpg";
+import chainsawHero from "@/assets/chainsaw-man-hero.jpg";
+import { Brand } from "@/components/anipulse-brand";
+import { AniPulseMenu } from "@/components/anipulse-menu";
+import { AnimeVote } from "@/components/anime-vote";
+import { VoiceActors } from "@/components/voice-actors";
 
-export function Brand() {
-  return (
-    <div className="brand">
-      <svg className="brand-mark" viewBox="0 0 32 36" fill="none" aria-hidden="true">
-        <path
-          d="M4 29V6l12 16L28 6v23M4 29l-3 4m27-4 3 4"
-          stroke="currentColor"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      MIRURO<small>TV</small>
-    </div>
-  );
-}
 function Metadata({ anime, hero = false }: { anime: Anime; hero?: boolean }) {
   return (
     <div className="metadata">
@@ -152,6 +143,7 @@ const genres = [
   "Sports",
   "Slice of Life",
 ];
+const featuredImages = [heroImage, soloHero, demonHero, chainsawHero];
 const featuredIds = [52991, 52299, 51009, 44511];
 export function AnimeHome() {
   const [query, setQuery] = useState("");
@@ -160,6 +152,8 @@ export function AnimeHome() {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Anime | null>(null);
   const [saved, setSaved] = useState<number[]>([]);
+  const [history, setHistory] = useState<number[]>([]);
+  const [historyOnly, setHistoryOnly] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [watchlistOnly, setWatchlistOnly] = useState(false);
@@ -182,19 +176,25 @@ export function AnimeHome() {
       (a) =>
         a.title.toLowerCase().includes(query.toLowerCase()) &&
         (genre === "All genres" || a.genres.includes(genre)) &&
-        (!watchlistOnly || saved.includes(a.id)),
+        (!watchlistOnly || saved.includes(a.id)) &&
+         (!historyOnly || history.includes(a.id)),
     );
     if (tab === "Top rated") list = [...list].sort((a, b) => b.score - a.score);
     if (tab === "Popular") list = [...list].sort((a, b) => b.popularity - a.popularity);
     return list;
-  }, [query, genre, tab, watchlistOnly, saved]);
+  }, [query, genre, tab, watchlistOnly, saved, historyOnly, history]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / 12));
   const visible = filtered.slice((page - 1) * 12, page * 12);
   function resetFilters() {
     setQuery("");
     setGenre("All genres");
     setWatchlistOnly(false);
+    setHistoryOnly(false);
     setPage(1);
+  }
+  function selectAnime(anime: Anime) {
+    setSelected(anime);
+    setHistory((prev) => [anime.id, ...prev.filter((id) => id !== anime.id)]);
   }
   function toggleSaved(id: number) {
     setSaved((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -289,7 +289,7 @@ export function AnimeHome() {
             title="Random anime"
             aria-label="Random anime"
             onClick={() =>
-              setSelected(animeCatalog[Math.floor(Math.random() * animeCatalog.length)] ?? current)
+              selectAnime(animeCatalog[Math.floor(Math.random() * animeCatalog.length)] ?? current)
             }
           >
             <Shuffle />
@@ -316,7 +316,7 @@ export function AnimeHome() {
             <img
               key={anime.id}
               className={`hero-image ${slide === index ? "is-active" : ""}`}
-              src={index === 0 ? heroImage : anime.image}
+              src={featuredImages[index]}
               alt={index === 0 ? "Frieren in a mountain valley" : anime.title}
               aria-hidden={slide !== index}
               width={1920}
@@ -370,7 +370,7 @@ export function AnimeHome() {
             <h1>{current.title}</h1>
             <p className="hero-description">{current.description}</p>
             <div className="hero-actions">
-              <Button onClick={() => setSelected(current)}>
+              <Button onClick={() => selectAnime(current)}>
                 <Play fill="currentColor" /> Explore anime
               </Button>
               <Button variant="outline" onClick={() => toggleSaved(current.id)}>
@@ -443,7 +443,7 @@ export function AnimeHome() {
                 <h3>Your next obsession starts here.</h3>
                 <p>
                   {bookmarked
-                    ? "Miruro is on your favorites list."
+                    ? "AniPulse is on your favorites list."
                     : "A whole world of anime. One place to call home."}
                 </p>
               </div>
@@ -468,9 +468,9 @@ export function AnimeHome() {
                       {t.toUpperCase()}
                     </Button>
                   ))}
-                  {watchlistOnly && (
+                  {(watchlistOnly || historyOnly) && (
                     <Button variant="ghost" onClick={resetFilters}>
-                      Watchlist <X />
+                      {historyOnly ? "History" : "Watchlist"} <X />
                     </Button>
                   )}
                 </div>
@@ -501,15 +501,15 @@ export function AnimeHome() {
               {visible.length ? (
                 <div className="anime-grid">
                   {visible.map((a) => (
-                    <AnimeCard key={a.id} anime={a} onSelect={setSelected} />
+                    <AnimeCard key={a.id} anime={a} onSelect={selectAnime} />
                   ))}
                 </div>
               ) : (
                 <div className="empty-state">
                   <Search className="mx-auto mb-3" />
-                  <h3>{watchlistOnly ? "Your watchlist is waiting" : "No anime found"}</h3>
+                  <h3>{historyOnly ? "No anime explored yet" : watchlistOnly ? "Your watchlist is waiting" : "No anime found"}</h3>
                   <p>
-                    {watchlistOnly
+                    {historyOnly ? "Your explored anime will appear here." : watchlistOnly
                       ? "Save an anime to see it here."
                       : "Try another title or genre."}
                   </p>
@@ -519,19 +519,64 @@ export function AnimeHome() {
                 </div>
               )}
             </section>
+
+          </div>
+          <aside className="sidebar">
+            <AnimeList
+              title="Top airing"
+              icon="flame"
+              items={animeCatalog.filter((a) => a.type !== "MOVIE").slice(0, 7)}
+              onSelect={selectAnime}
+            />
+            <AnimeList
+              title="On the horizon"
+              items={animeCatalog.slice(6, 12)}
+              onSelect={selectAnime}
+              status="upcoming"
+            />
+          </aside>
+        </div>
+
             <div className="bottom-lists">
               <AnimeList
                 title="Just finished"
                 items={[...animeCatalog].filter((a) => a.status === "finished")}
-                onSelect={setSelected}
+                onSelect={selectAnime}
                 status="finished"
               />
               <AnimeList
                 title="Top movies"
                 items={animeCatalog.filter((a) => a.type === "MOVIE")}
-                onSelect={setSelected}
+                onSelect={selectAnime}
                 status="finished"
               />
+              <section className="list-section awards-section" aria-label="Anime Award">
+                <h2 className="section-heading"><ChevronRight />Anime Award</h2>
+                <div className="rank-list">
+                  {animeAwards.map((award) => {
+                    const anime = animeCatalog.find((item) => item.id === award.animeId);
+                    if (!anime) return null;
+                    return (
+                      <Button
+                        key={anime.id}
+                        variant="ghost"
+                        className="rank-item award-item"
+                        aria-label={`Details for ${anime.title}, ${award.recognition}`}
+                        onClick={() => selectAnime(anime)}
+                      >
+                        <img src={anime.image} alt="" loading="lazy" width={63} height={90} />
+                        <div className="rank-body">
+                          <div className="rank-title"><span className="status-dot upcoming" /><span className="name">{anime.title}</span></div>
+                          <p className="award-recognition">{award.recognition}</p>
+                          <span className="award-year">{award.year}</span>
+                        </div>
+                      </Button>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+        <div className="bottom-lists community-lists">
               <section className="schedule">
                 <div className="schedule-head">
                   <h2>Airing schedule</h2>
@@ -571,47 +616,9 @@ export function AnimeHome() {
                   <ArrowRight />
                 </Button>
               </section>
-              <section className="list-section awards-section" aria-label="Anime Award">
-                <h2 className="section-heading"><ChevronRight />Anime Award</h2>
-                <div className="rank-list">
-                  {animeAwards.map((award) => {
-                    const anime = animeCatalog.find((item) => item.id === award.animeId);
-                    if (!anime) return null;
-                    return (
-                      <Button
-                        key={anime.id}
-                        variant="ghost"
-                        className="rank-item award-item"
-                        aria-label={`Details for ${anime.title}, ${award.recognition}`}
-                        onClick={() => setSelected(anime)}
-                      >
-                        <img src={anime.image} alt="" loading="lazy" width={63} height={90} />
-                        <div className="rank-body">
-                          <div className="rank-title"><span className="status-dot upcoming" /><span className="name">{anime.title}</span></div>
-                          <p className="award-recognition">{award.recognition}</p>
-                          <span className="award-year">{award.year}</span>
-                        </div>
-                      </Button>
-                    );
-                  })}
-                </div>
-              </section>
-            </div>
-          </div>
-          <aside className="sidebar">
-            <AnimeList
-              title="Top airing"
-              icon="flame"
-              items={animeCatalog.filter((a) => a.type !== "MOVIE").slice(0, 7)}
-              onSelect={setSelected}
-            />
-            <AnimeList
-              title="On the horizon"
-              items={animeCatalog.slice(6, 12)}
-              onSelect={setSelected}
-              status="upcoming"
-            />
-          </aside>
+
+          <VoiceActors />
+          <AnimeVote />
         </div>
         <footer className="site-footer">
           <div className="footer-top">
@@ -652,7 +659,7 @@ export function AnimeHome() {
             </div>
           </div>
           <div className="footer-bottom">
-            <span>© 2026 Miruro · A personal anime portfolio</span>
+            <span>© 2026 AniPulse · A personal anime portfolio</span>
             <span>
               Made for the love of anime <span className="text-primary">✦</span>
             </span>
@@ -687,55 +694,16 @@ export function AnimeHome() {
           )}
         </DialogContent>
       </Dialog>
-      <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogTitle>
-            <Brand />
-          </DialogTitle>
-          <DialogDescription>Your anime universe</DialogDescription>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              resetFilters();
-              browse();
-            }}
-          >
-            <Play />
-            Browse anime
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setTab("Popular");
-              browse();
-            }}
-          >
-            <Flame />
-            Trending
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setWatchlistOnly(true);
-              setPage(1);
-              browse();
-            }}
-          >
-            <Bookmark />
-            My watchlist
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setMenuOpen(false);
-              document.querySelector(".schedule")?.scrollIntoView({ behavior: "smooth" });
-            }}
-          >
-            <CalendarDays />
-            Airing schedule
-          </Button>
-        </DialogContent>
-      </Dialog>
+      <AniPulseMenu open={menuOpen} onOpenChange={setMenuOpen} paused={paused} togglePaused={togglePaused} savedCount={saved.length} historyCount={history.length} onNavigate={(view) => {
+        resetFilters();
+        setMenuOpen(false);
+        if (view === "Home") { setTab("Newest"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+        if (view === "Schedule" || view === "Vote anime") { document.querySelector(view === "Schedule" ? ".schedule" : "#anime-vote")?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+        if (view === "Trending") setTab("Popular");
+        if (view === "History") setHistoryOnly(true);
+        if (view === "Watchlist") setWatchlistOnly(true);
+        browse();
+      }} />
     </>
   );
 }
