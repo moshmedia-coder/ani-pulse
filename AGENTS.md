@@ -13,3 +13,4 @@
 - Store anime artwork as project asset pointers and import generated featured artwork directly; this keeps media reliable without external image hotlinks.
 - Keep featured slideshow timing in a browser-only React hook with cleaned-up timers and manual pause; this isolates continuous animation from catalog interactions.
 - Keep award recognitions alongside the browser-safe catalog with award year and source; this makes factual recognition traceable without a server dependency.
+- Keep the branded navigation drawer and community sections in focused components; the homepage remains a portfolio experience with session-only voting, history, and collection state, not shared vote totals or user accounts.
