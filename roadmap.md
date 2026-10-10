@@ -7,3 +7,7 @@
 - [x] Give every button the green hover colour, including list rows, tabs, day tabs, and carousel arrows.
 - [x] Add Anime Award beside Airing schedule with verified award-winning anime.
 - [x] Auto-rotate featured anime with fade-in/out and verify both homepage updates.
+- [ ] Rename to AniPulse and replace logo and favicon.
+- [ ] Move awards beside finished/movies; add voice actors and session voting beside schedule.
+- [ ] Replace portrait-based featured banners with clear landscape artwork.
+- [ ] Add reference-style slide-out menu with homepage navigation and verify interactions.
