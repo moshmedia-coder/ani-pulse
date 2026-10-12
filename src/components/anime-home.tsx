@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   Bookmark,
@@ -34,6 +34,7 @@ import { AnimeVote } from "@/components/anime-vote";
 import { VoiceActors } from "@/components/voice-actors";
 import { LiveTrending } from "@/components/live-trending";
 import { Link } from "@tanstack/react-router";
+import { readWatchedEpisodes, WATCH_HISTORY_CHANGE_EVENT } from "@/lib/watch-history";
 
 function Metadata({ anime, hero = false }: { anime: Anime; hero?: boolean }) {
   return (
@@ -57,7 +58,15 @@ function Metadata({ anime, hero = false }: { anime: Anime; hero?: boolean }) {
     </div>
   );
 }
-function AnimeCard({ anime, onSelect }: { anime: Anime; onSelect: (anime: Anime) => void }) {
+function AnimeCard({
+  anime,
+  onSelect,
+  resumeEpisode,
+}: {
+  anime: Anime;
+  onSelect: (anime: Anime) => void;
+  resumeEpisode?: number;
+}) {
   return (
     <article className="anime-card">
       <Button
@@ -78,6 +87,18 @@ function AnimeCard({ anime, onSelect }: { anime: Anime; onSelect: (anime: Anime)
         <span className={`status-dot ${anime.status}`} />
         <span title={anime.title}>{anime.title}</span>
       </div>
+      {resumeEpisode !== undefined && (
+        <Link
+          to="/watch/$animeId"
+          params={{ animeId: String(anime.id) }}
+          search={{ ep: resumeEpisode }}
+          className="resume-badge"
+          aria-label={`Resume ${anime.title} at episode ${resumeEpisode}`}
+        >
+          <Play />
+          Resume Ep {resumeEpisode}
+        </Link>
+      )}
       <Metadata anime={anime} />
     </article>
   );
@@ -154,7 +175,7 @@ export function AnimeHome() {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Anime | null>(null);
   const [saved, setSaved] = useState<number[]>([]);
-  const [history, setHistory] = useState<number[]>([]);
+  const [watchedEpisodes, setWatchedEpisodes] = useState<Record<number, number>>({});
   const [historyOnly, setHistoryOnly] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -165,6 +186,16 @@ export function AnimeHome() {
   const inputRef = useRef<HTMLInputElement>(null);
   const genreRef = useRef<HTMLDivElement>(null);
   const [genreEdges, setGenreEdges] = useState({ start: true, end: false, overflow: false });
+  const refreshWatchedEpisodes = useCallback(() => {
+    const next: Record<number, number> = {};
+    for (const anime of animeCatalog) {
+      const episodes = readWatchedEpisodes(anime.id);
+      if (episodes.length > 0) {
+        next[anime.id] = episodes.reduce((latest, episode) => Math.max(latest, episode), 0);
+      }
+    }
+    setWatchedEpisodes(next);
+  }, []);
   const featured = featuredIds
     .map((id) => animeCatalog.find((a) => a.id === id))
     .filter((a): a is Anime => Boolean(a));
@@ -173,18 +204,19 @@ export function AnimeHome() {
     selected !== null || menuOpen,
   );
   const current = featured[slide] ?? animeCatalog[0];
+  const historyCount = Object.keys(watchedEpisodes).length;
   const filtered = useMemo(() => {
     let list = animeCatalog.filter(
       (a) =>
         a.title.toLowerCase().includes(query.toLowerCase()) &&
         (genre === "All genres" || a.genres.includes(genre)) &&
         (!watchlistOnly || saved.includes(a.id)) &&
-         (!historyOnly || history.includes(a.id)),
+        (!historyOnly || watchedEpisodes[a.id] !== undefined),
     );
     if (tab === "Top rated") list = [...list].sort((a, b) => b.score - a.score);
     if (tab === "Popular") list = [...list].sort((a, b) => b.popularity - a.popularity);
     return list;
-  }, [query, genre, tab, watchlistOnly, saved, historyOnly, history]);
+  }, [query, genre, tab, watchlistOnly, saved, historyOnly, watchedEpisodes]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / 12));
   const visible = filtered.slice((page - 1) * 12, page * 12);
   function resetFilters() {
@@ -196,7 +228,6 @@ export function AnimeHome() {
   }
   function selectAnime(anime: Anime) {
     setSelected(anime);
-    setHistory((prev) => [anime.id, ...prev.filter((id) => id !== anime.id)]);
   }
   function toggleSaved(id: number) {
     setSaved((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -205,6 +236,20 @@ export function AnimeHome() {
     catalogRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     setMenuOpen(false);
   }
+  useEffect(() => {
+    refreshWatchedEpisodes();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") refreshWatchedEpisodes();
+    };
+    window.addEventListener(WATCH_HISTORY_CHANGE_EVENT, refreshWatchedEpisodes);
+    window.addEventListener("pageshow", refreshWatchedEpisodes);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener(WATCH_HISTORY_CHANGE_EVENT, refreshWatchedEpisodes);
+      window.removeEventListener("pageshow", refreshWatchedEpisodes);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [refreshWatchedEpisodes]);
   function measureGenres() {
     const el = genreRef.current;
     if (!el) return;
@@ -509,17 +554,30 @@ export function AnimeHome() {
               {visible.length ? (
                 <div className="anime-grid">
                   {visible.map((a) => (
-                    <AnimeCard key={a.id} anime={a} onSelect={selectAnime} />
+                    <AnimeCard
+                      key={a.id}
+                      anime={a}
+                      onSelect={selectAnime}
+                      resumeEpisode={historyOnly ? watchedEpisodes[a.id] : undefined}
+                    />
                   ))}
                 </div>
               ) : (
                 <div className="empty-state">
                   <Search className="mx-auto mb-3" />
-                  <h3>{historyOnly ? "No anime explored yet" : watchlistOnly ? "Your watchlist is waiting" : "No anime found"}</h3>
+                  <h3>
+                    {historyOnly
+                      ? "No anime watched this session"
+                      : watchlistOnly
+                        ? "Your watchlist is waiting"
+                        : "No anime found"}
+                  </h3>
                   <p>
-                    {historyOnly ? "Your explored anime will appear here." : watchlistOnly
-                      ? "Save an anime to see it here."
-                      : "Try another title or genre."}
+                    {historyOnly
+                      ? "Anime with watched episodes will appear here."
+                      : watchlistOnly
+                        ? "Save an anime to see it here."
+                        : "Try another title or genre."}
                   </p>
                   <Button variant="link" onClick={resetFilters}>
                     Browse all anime <ArrowRight />
@@ -694,7 +752,15 @@ export function AnimeHome() {
                   <div className="text-xs text-primary">{selected.genres.join(" · ")}</div>
                   <div className="flex flex-wrap gap-2">
                     <Button asChild>
-                      <Link to="/watch/$animeId" params={{ animeId: String(selected.id) }}>
+                      <Link
+                        to="/watch/$animeId"
+                        params={{ animeId: String(selected.id) }}
+                        search={
+                          watchedEpisodes[selected.id] !== undefined
+                            ? { ep: watchedEpisodes[selected.id] }
+                            : undefined
+                        }
+                      >
                         <Play fill="currentColor" /> Watch now
                       </Link>
                     </Button>
@@ -709,13 +775,16 @@ export function AnimeHome() {
           )}
         </DialogContent>
       </Dialog>
-      <AniPulseMenu open={menuOpen} onOpenChange={setMenuOpen} paused={paused} togglePaused={togglePaused} savedCount={saved.length} historyCount={history.length} onNavigate={(view) => {
+      <AniPulseMenu open={menuOpen} onOpenChange={setMenuOpen} paused={paused} togglePaused={togglePaused} savedCount={saved.length} historyCount={historyCount} onNavigate={(view) => {
         resetFilters();
         setMenuOpen(false);
         if (view === "Home") { setTab("Newest"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
         if (view === "Schedule" || view === "Vote anime") { document.querySelector(view === "Schedule" ? ".schedule" : "#anime-vote")?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
         if (view === "Trending") setTab("Popular");
-        if (view === "History") setHistoryOnly(true);
+        if (view === "History") {
+          refreshWatchedEpisodes();
+          setHistoryOnly(true);
+        }
         if (view === "Watchlist") setWatchlistOnly(true);
         browse();
       }} />

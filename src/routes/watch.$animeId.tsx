@@ -19,6 +19,11 @@ import { Button } from "@/components/ui/button";
 import { Brand } from "@/components/anipulse-brand";
 import { animeCatalog } from "@/lib/anime-data";
 import { animeTitle, cleanDescription, mediaByMalQuery } from "@/lib/anilist";
+import {
+  notifyWatchHistoryChanged,
+  readWatchedEpisodes,
+  watchedEpisodesStorageKey,
+} from "@/lib/watch-history";
 
 export const Route = createFileRoute("/watch/$animeId")({
   validateSearch: z.object({ ep: z.coerce.number().int().min(1).catch(1).optional() }),
@@ -59,11 +64,11 @@ function WatchPage() {
   const [theater, setTheater] = useState(false);
   const [grid, setGrid] = useState(true);
   const [watched, setWatched] = useState<number[]>([]);
-  const storageKey = `anipulse-watched-${malId}`;
+  const storageKey = watchedEpisodesStorageKey(malId);
 
   useEffect(() => {
-    setWatched(JSON.parse(sessionStorage.getItem(storageKey) ?? "[]"));
-  }, [storageKey]);
+    setWatched(readWatchedEpisodes(malId));
+  }, [malId]);
   useEffect(() => setPlaying(false), [episode, malId]);
 
   function play() {
@@ -71,6 +76,7 @@ function WatchPage() {
     const next = Array.from(new Set([...watched, episode]));
     setWatched(next);
     sessionStorage.setItem(storageKey, JSON.stringify(next));
+    notifyWatchHistoryChanged();
   }
   const goTo = (n: number) => navigate({ search: { ep: n }, replace: true });
 

@@ -516,6 +516,29 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.resume-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  margin: 0 0 8px;
+  padding: 4px 7px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.resume-badge:hover,
+.resume-badge:focus-visible {
+  box-shadow: var(--shadow-card);
+  outline: none;
+}
+.resume-badge svg {
+  width: 11px;
+  height: 11px;
+}
 .status-dot {
   width: 6px;
   height: 6px;
