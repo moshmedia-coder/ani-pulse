@@ -31,7 +31,21 @@ export function LiveTrending() {
     trackRef.current?.scrollBy({ left: direction * 320, behavior: "smooth" });
   }
 
-  if (isError) return null;
+  if (isError && !data) {
+    return (
+      <section className="live-trending" aria-labelledby="live-trending-title">
+        <div className="section-heading live-heading">
+          <h2 id="live-trending-title">
+            Trending now <ChevronRight />
+          </h2>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Trending is temporarily unavailable. Please try again later.
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section className="live-trending" aria-labelledby="live-trending-title">
       <div className="section-heading live-heading">
@@ -66,7 +80,7 @@ export function LiveTrending() {
         >
           {isPending
             ? Array.from({ length: 8 }, (_, i) => <div key={i} className="live-card skeleton" />)
-            : data.map((m, index) => {
+            : data?.map((m, index) => {
                 const status =
                   m.status === "RELEASING"
                     ? "airing"

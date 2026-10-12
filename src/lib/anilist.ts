@@ -2,6 +2,44 @@ import { queryOptions } from "@tanstack/react-query";
 
 const ENDPOINT = "https://graphql.anilist.co";
 
+export class AniListNetworkError extends Error {
+  readonly kind = "network";
+
+  constructor() {
+    super("AniList network request failed");
+    this.name = "AniListNetworkError";
+  }
+}
+
+export class AniListHttpError extends Error {
+  readonly kind = "http";
+
+  constructor(
+    readonly status: number,
+    readonly retryAfter: string | null,
+  ) {
+    super(`AniList request failed (${status})`);
+    this.name = "AniListHttpError";
+  }
+}
+
+export class AniListGraphQLError extends Error {
+  readonly kind = "graphql";
+
+  constructor(readonly errors: string[]) {
+    super("AniList returned a GraphQL error");
+    this.name = "AniListGraphQLError";
+  }
+}
+
+function shouldRetryAniListRequest(failureCount: number, error: Error) {
+  return (
+    failureCount < 1 &&
+    (error instanceof AniListNetworkError ||
+      (error instanceof AniListHttpError && error.status >= 500))
+  );
+}
+
 export interface AniListMedia {
   id: number;
   idMal: number | null;
@@ -29,14 +67,21 @@ const BASE_FIELDS = `id idMal title { english romaji } description(asHtml: false
   trailer { id site } nextAiringEpisode { episode timeUntilAiring }`;
 
 async function request<T>(query: string, variables: Record<string, unknown>): Promise<T> {
-  const res = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ query, variables }),
-  });
-  if (!res.ok) throw new Error(`AniList request failed (${res.status})`);
+  let res: Response;
+  try {
+    res = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ query, variables }),
+    });
+  } catch {
+    throw new AniListNetworkError();
+  }
+  if (!res.ok) throw new AniListHttpError(res.status, res.headers.get("Retry-After"));
   const json = (await res.json()) as { data: T; errors?: { message: string }[] };
-  if (json.errors?.length) throw new Error(json.errors[0]?.message ?? "AniList error");
+  if (json.errors?.length) {
+    throw new AniListGraphQLError(json.errors.map((error) => error.message));
+  }
   return json.data;
 }
 
@@ -48,7 +93,7 @@ export const trendingQuery = () =>
   queryOptions({
     queryKey: ["anilist", "trending"],
     staleTime: 10 * 60 * 1000,
-    retry: 1,
+    retry: shouldRetryAniListRequest,
     queryFn: async () => {
       const data = await request<{ Page: { media: AniListMedia[] } }>(
         `query { Page(perPage: 18) { media(type: ANIME, sort: TRENDING_DESC, isAdult: false) { ${BASE_FIELDS} } } }`,
@@ -62,7 +107,7 @@ export const mediaByMalQuery = (malId: number) =>
   queryOptions({
     queryKey: ["anilist", "media", malId],
     staleTime: 30 * 60 * 1000,
-    retry: 1,
+    retry: shouldRetryAniListRequest,
     queryFn: async () => {
       const data = await request<{ Media: AniListMedia }>(
         `query ($id: Int) { Media(idMal: $id, type: ANIME) { ${BASE_FIELDS}
