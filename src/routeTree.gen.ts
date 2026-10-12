@@ -10,33 +10,43 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WatchAnimeIdRouteImport } from './routes/watch.$animeId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WatchAnimeIdRoute = WatchAnimeIdRouteImport.update({
+  id: '/watch/$animeId',
+  path: '/watch/$animeId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/watch/$animeId': typeof WatchAnimeIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/watch/$animeId': typeof WatchAnimeIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/watch/$animeId': typeof WatchAnimeIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/watch/$animeId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/watch/$animeId'
+  id: '__root__' | '/' | '/watch/$animeId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  WatchAnimeIdRoute: typeof WatchAnimeIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +58,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/watch/$animeId': {
+      id: '/watch/$animeId'
+      path: '/watch/$animeId'
+      fullPath: '/watch/$animeId'
+      preLoaderRoute: typeof WatchAnimeIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  WatchAnimeIdRoute: WatchAnimeIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

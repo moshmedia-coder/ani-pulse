@@ -32,6 +32,8 @@ import { Brand } from "@/components/anipulse-brand";
 import { AniPulseMenu } from "@/components/anipulse-menu";
 import { AnimeVote } from "@/components/anime-vote";
 import { VoiceActors } from "@/components/voice-actors";
+import { LiveTrending } from "@/components/live-trending";
+import { Link } from "@tanstack/react-router";
 
 function Metadata({ anime, hero = false }: { anime: Anime; hero?: boolean }) {
   return (
@@ -370,8 +372,13 @@ export function AnimeHome() {
             <h1>{current.title}</h1>
             <p className="hero-description">{current.description}</p>
             <div className="hero-actions">
-              <Button onClick={() => selectAnime(current)}>
-                <Play fill="currentColor" /> Explore anime
+              <Button asChild>
+                <Link to="/watch/$animeId" params={{ animeId: String(current.id) }}>
+                  <Play fill="currentColor" /> Watch now
+                </Link>
+              </Button>
+              <Button variant="outline" onClick={() => selectAnime(current)}>
+                Details
               </Button>
               <Button variant="outline" onClick={() => toggleSaved(current.id)}>
                 {saved.includes(current.id) ? <Check /> : <Bookmark />}
@@ -433,6 +440,7 @@ export function AnimeHome() {
             </Button>
           )}
         </div>
+        <LiveTrending />
         <div className="content-layout">
           <div>
             <div className="bookmark-banner">
@@ -684,10 +692,17 @@ export function AnimeHome() {
                     {selected.description}
                   </DialogDescription>
                   <div className="text-xs text-primary">{selected.genres.join(" · ")}</div>
-                  <Button onClick={() => toggleSaved(selected.id)}>
-                    {saved.includes(selected.id) ? <Check /> : <Bookmark />}
-                    {saved.includes(selected.id) ? "Saved to watchlist" : "Add to watchlist"}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button asChild>
+                      <Link to="/watch/$animeId" params={{ animeId: String(selected.id) }}>
+                        <Play fill="currentColor" /> Watch now
+                      </Link>
+                    </Button>
+                    <Button variant="outline" onClick={() => toggleSaved(selected.id)}>
+                      {saved.includes(selected.id) ? <Check /> : <Bookmark />}
+                      {saved.includes(selected.id) ? "Saved to watchlist" : "Add to watchlist"}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </>
