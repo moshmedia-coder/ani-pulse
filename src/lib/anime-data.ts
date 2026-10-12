@@ -1,23 +1,3 @@
-import poster52991 from "@/assets/anime/52991.asset.json";
-import poster52299 from "@/assets/anime/52299.asset.json";
-import poster51009 from "@/assets/anime/51009.asset.json";
-import poster44511 from "@/assets/anime/44511.asset.json";
-import poster40748 from "@/assets/anime/40748.asset.json";
-import poster21 from "@/assets/anime/21.asset.json";
-import poster54492 from "@/assets/anime/54492.asset.json";
-import poster50265 from "@/assets/anime/50265.asset.json";
-import poster46569 from "@/assets/anime/46569.asset.json";
-import poster52034 from "@/assets/anime/52034.asset.json";
-import poster49596 from "@/assets/anime/49596.asset.json";
-import poster28851 from "@/assets/anime/28851.asset.json";
-import poster32281 from "@/assets/anime/32281.asset.json";
-import poster199 from "@/assets/anime/199.asset.json";
-import poster37510 from "@/assets/anime/37510.asset.json";
-import poster38000 from "@/assets/anime/38000.asset.json";
-import poster16498 from "@/assets/anime/16498.asset.json";
-import poster38524 from "@/assets/anime/38524.asset.json";
-import poster41467 from "@/assets/anime/41467.asset.json";
-
 export interface Anime {
   id: number;
   title: string;
@@ -63,7 +43,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 52991,
     title: "Frieren: Beyond Journey's End",
-    image: poster52991.url,
+    image: "/images/anime/52991.jpg",
     score: 9.3,
     year: 2023,
     episodes: 28,
@@ -77,7 +57,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 52299,
     title: "Solo Leveling",
-    image: poster52299.url,
+    image: "/images/anime/52299.jpg",
     score: 8.3,
     year: 2024,
     episodes: 12,
@@ -91,7 +71,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 51009,
     title: "Demon Slayer: Swordsmith Village Arc",
-    image: poster51009.url,
+    image: "/images/anime/51009.jpg",
     score: 8.2,
     year: 2023,
     episodes: 11,
@@ -105,7 +85,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 44511,
     title: "Chainsaw Man",
-    image: poster44511.url,
+    image: "/images/anime/44511.jpg",
     score: 8.5,
     year: 2022,
     episodes: 12,
@@ -119,7 +99,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 40748,
     title: "Jujutsu Kaisen",
-    image: poster40748.url,
+    image: "/images/anime/40748.jpg",
     score: 8.6,
     year: 2020,
     episodes: 24,
@@ -133,7 +113,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 21,
     title: "One Piece",
-    image: poster21.url,
+    image: "/images/anime/21.jpg",
     score: 8.7,
     year: 1999,
     episodes: 1122,
@@ -147,7 +127,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 54492,
     title: "The Apothecary Diaries",
-    image: poster54492.url,
+    image: "/images/anime/54492.jpg",
     score: 8.9,
     year: 2023,
     episodes: 24,
@@ -161,7 +141,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 50265,
     title: "SPY x FAMILY",
-    image: poster50265.url,
+    image: "/images/anime/50265.jpg",
     score: 8.5,
     year: 2022,
     episodes: 12,
@@ -175,7 +155,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 46569,
     title: "Hell's Paradise",
-    image: poster46569.url,
+    image: "/images/anime/46569.jpg",
     score: 8.1,
     year: 2023,
     episodes: 13,
@@ -189,7 +169,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 52034,
     title: "Oshi No Ko",
-    image: poster52034.url,
+    image: "/images/anime/52034.jpg",
     score: 8.6,
     year: 2023,
     episodes: 11,
@@ -203,7 +183,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 49596,
     title: "Blue Lock",
-    image: poster49596.url,
+    image: "/images/anime/49596.jpg",
     score: 8.2,
     year: 2022,
     episodes: 24,
@@ -217,7 +197,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 28851,
     title: "A Silent Voice",
-    image: poster28851.url,
+    image: "/images/anime/28851.jpg",
     score: 8.9,
     year: 2016,
     episodes: 1,
@@ -231,7 +211,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 32281,
     title: "Your Name.",
-    image: poster32281.url,
+    image: "/images/anime/32281.jpg",
     score: 8.8,
     year: 2016,
     episodes: 1,
@@ -245,7 +225,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 199,
     title: "Spirited Away",
-    image: poster199.url,
+    image: "/images/anime/199.jpg",
     score: 8.8,
     year: 2001,
     episodes: 1,
@@ -259,7 +239,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 37510,
     title: "Weathering with You",
-    image: poster37510.url,
+    image: "/images/anime/37510.jpg",
     score: 8.3,
     year: 2019,
     episodes: 1,
@@ -273,7 +253,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 38000,
     title: "Demon Slayer: Kimetsu no Yaiba",
-    image: poster38000.url,
+    image: "/images/anime/38000.jpg",
     score: 8.4,
     year: 2019,
     episodes: 26,
@@ -287,7 +267,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 16498,
     title: "Attack on Titan",
-    image: poster16498.url,
+    image: "/images/anime/16498.jpg",
     score: 8.6,
     year: 2013,
     episodes: 25,
@@ -301,7 +281,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 38524,
     title: "Attack on Titan Season 3 Part 2",
-    image: poster38524.url,
+    image: "/images/anime/38524.jpg",
     score: 9.1,
     year: 2019,
     episodes: 10,
@@ -315,7 +295,7 @@ export const animeCatalog: Anime[] = [
   {
     id: 41467,
     title: "Bleach: Thousand-Year Blood War",
-    image: poster41467.url,
+    image: "/images/anime/41467.jpg",
     score: 9.0,
     year: 2022,
     episodes: 13,
