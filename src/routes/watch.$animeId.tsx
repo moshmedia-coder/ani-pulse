@@ -49,13 +49,36 @@ function WatchPage() {
   const { ep = 1 } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const malId = Number(animeId);
+  const validMalId = Number.isSafeInteger(malId) && malId > 0;
   const local = animeCatalog.find((a) => a.id === malId);
-  const { data: media, isPending } = useQuery({ ...mediaByMalQuery(malId), enabled: Number.isFinite(malId) });
+  const {
+    data: media,
+    isError,
+    isPending,
+  } = useQuery({
+    ...mediaByMalQuery(validMalId ? malId : 0),
+    enabled: validMalId,
+  });
 
-  const title = media ? animeTitle(media) : (local?.title ?? (isPending ? "Loading…" : "Unknown anime"));
-  const total = Math.max(1, media?.episodes ?? media?.nextAiringEpisode?.episode ?? local?.episodes ?? 12);
-  const released = media?.nextAiringEpisode ? Math.max(1, media.nextAiringEpisode.episode - 1) : total;
-  const episode = Math.min(ep, released);
+  const title =
+    (media ? animeTitle(media).trim() : "") ||
+    local?.title ||
+    (isPending ? "Loading…" : "Unknown anime");
+  const mediaEpisodeCount =
+    media?.episodes != null && Number.isSafeInteger(media.episodes) && media.episodes > 0
+      ? media.episodes
+      : null;
+  const localEpisodeCount =
+    local && Number.isSafeInteger(local.episodes) && local.episodes > 0 ? local.episodes : null;
+  const nextAiringEpisode =
+    media?.nextAiringEpisode?.episode != null &&
+    Number.isSafeInteger(media.nextAiringEpisode.episode) &&
+    media.nextAiringEpisode.episode > 0
+      ? media.nextAiringEpisode.episode
+      : null;
+  const total = mediaEpisodeCount ?? localEpisodeCount;
+  const released = nextAiringEpisode !== null ? Math.max(0, nextAiringEpisode - 1) : total;
+  const episode = released !== null ? Math.min(ep, Math.max(1, released)) : ep;
   const banner = media?.bannerImage ?? media?.coverImage.extraLarge ?? local?.image;
   const description = cleanDescription(media?.description ?? null) || local?.description || "";
 
@@ -72,6 +95,7 @@ function WatchPage() {
   useEffect(() => setPlaying(false), [episode, malId]);
 
   function play() {
+    if (!trailer || (released !== null && episode > released) || !validMalId) return;
     setPlaying(true);
     const next = Array.from(new Set([...watched, episode]));
     setWatched(next);
@@ -80,8 +104,34 @@ function WatchPage() {
   }
   const goTo = (n: number) => navigate({ search: { ep: n }, replace: true });
 
-  const episodes = useMemo(() => Array.from({ length: released }, (_, i) => i + 1), [released]);
+  const episodes = useMemo(
+    () => Array.from({ length: released ?? 0 }, (_, i) => i + 1),
+    [released],
+  );
   const trailer = media?.trailer?.site === "youtube" ? media.trailer.id : null;
+  const canPlayEpisode =
+    trailer !== null && (released === null || episode <= released) && validMalId;
+  const episodeBoundaryMessage =
+    episode <= 1
+      ? "You're at the first episode."
+      : released === null
+        ? "Episode count is unavailable, so next episode navigation is disabled."
+        : episode >= released
+          ? "You're at the latest available episode."
+          : "";
+  const rating =
+    media?.averageScore != null && Number.isFinite(media.averageScore)
+      ? (media.averageScore / 10).toFixed(1)
+      : local?.score != null && Number.isFinite(local.score)
+        ? local.score.toFixed(1)
+        : null;
+  const year =
+    media?.seasonYear != null && Number.isSafeInteger(media.seasonYear) && media.seasonYear > 0
+      ? media.seasonYear
+      : local?.year;
+  const format = media?.format?.trim() || local?.type.trim() || "";
+  const mediaGenres = media?.genres.map((item) => item.trim()).filter(Boolean) ?? [];
+  const genres = mediaGenres.length > 0 ? mediaGenres : (local?.genres ?? []);
 
   return (
     <div className="watch-page">
@@ -105,7 +155,16 @@ function WatchPage() {
                 allowFullScreen
               />
             ) : (
-              <button className="player-cover" onClick={play} aria-label={`Play episode ${episode}`}>
+              <button
+                className="player-cover"
+                onClick={play}
+                disabled={!canPlayEpisode}
+                aria-label={
+                  canPlayEpisode
+                    ? `Play episode ${episode} trailer preview`
+                    : `Trailer preview unavailable for episode ${episode}`
+                }
+              >
                 {banner && <img src={banner} alt="" />}
                 <span className="player-play">
                   <Play fill="currentColor" />
@@ -113,45 +172,96 @@ function WatchPage() {
                 <span className="player-caption">
                   Episode {episode} · {audio}
                 </span>
-                {playing && !trailer && <span className="player-note">No preview available for this title.</span>}
+                {!canPlayEpisode && (
+                  <span className="player-note">
+                    {isPending
+                      ? "Loading trailer details…"
+                      : released === 0
+                        ? "No episodes have aired yet."
+                        : "No trailer preview is available for this title."}
+                  </span>
+                )}
               </button>
             )}
           </div>
           <p className="player-disclaimer">
-            Portfolio demo — plays the official trailer. Full episodes are available on licensed services.
+            Portfolio demo — this player previews trailers only; it does not stream full episodes.
           </p>
 
           <div className="player-bar">
-            <Button variant="outline" size="sm" disabled={episode <= 1} onClick={() => goTo(episode - 1)}>
-              <ChevronLeft /> Prev
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={episode <= 1}
+              title={episode <= 1 ? "You are at the first episode" : "Go to previous episode"}
+              onClick={() => goTo(episode - 1)}
+            >
+              <ChevronLeft /> Previous episode
             </Button>
-            <div className="audio-toggle" role="group" aria-label="Audio">
+            <div className="audio-toggle" role="group" aria-label="Audio preference for demo">
               {(["SUB", "DUB"] as const).map((a) => (
-                <button key={a} data-active={audio === a} onClick={() => setAudio(a)}>
+                <button
+                  key={a}
+                  data-active={audio === a}
+                  aria-pressed={audio === a}
+                  onClick={() => setAudio(a)}
+                >
                   {a}
                 </button>
               ))}
             </div>
-            <Button variant="outline" size="sm" onClick={() => setTheater(!theater)}>
+            <Button
+              variant="outline"
+              size="sm"
+              aria-pressed={theater}
+              onClick={() => setTheater(!theater)}
+            >
               {theater ? <Minimize2 /> : <Maximize2 />} {theater ? "Default" : "Theater"}
             </Button>
-            <Button variant="outline" size="sm" disabled={episode >= released} onClick={() => goTo(episode + 1)}>
-              Next <ChevronRight />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={released === null || episode >= released}
+              title={
+                released === null
+                  ? "Episode count unavailable"
+                  : episode >= released
+                    ? "You are at the latest available episode"
+                    : "Go to next episode"
+              }
+              onClick={() => goTo(episode + 1)}
+            >
+              Next episode <ChevronRight />
             </Button>
           </div>
+          <p className="audio-note">
+            SUB/DUB is a display preference here; trailer audio is provided by YouTube.
+          </p>
 
           <div className="watch-info">
             {media?.coverImage.extraLarge || local?.image ? (
-              <img src={media?.coverImage.extraLarge ?? local?.image} alt={title} width={130} height={188} />
+              <img
+                src={media?.coverImage.extraLarge ?? local?.image}
+                alt={title}
+                width={130}
+                height={188}
+              />
             ) : null}
             <div>
               <h1>{title}</h1>
+              <p className="watch-current-episode">
+                {released === null
+                  ? `Episode ${episode} · Episode count unavailable`
+                  : `Episode ${episode} of ${released} available${nextAiringEpisode !== null ? ` (${total ?? released} total planned)` : ""}`}
+              </p>
               <div className="metadata">
-                {media?.format && <span>{media.format.replace("_", " ")}</span>}
-                {(media?.seasonYear ?? local?.year) && <span>{media?.seasonYear ?? local?.year}</span>}
-                <span>
-                  <Star /> {media?.averageScore ? (media.averageScore / 10).toFixed(1) : (local?.score ?? "—")}
-                </span>
+                {format && <span>{format.replaceAll("_", " ")}</span>}
+                {year != null && <span>{year}</span>}
+                {rating && (
+                  <span>
+                    <Star /> {rating}
+                  </span>
+                )}
                 {media?.duration && (
                   <span>
                     <Clock3 /> {media.duration} min
@@ -159,8 +269,15 @@ function WatchPage() {
                 )}
                 {media?.studios?.nodes[0] && <span>{media.studios.nodes[0].name}</span>}
               </div>
-              <p>{description}</p>
-              <div className="text-xs text-primary">{(media?.genres ?? local?.genres ?? []).join(" · ")}</div>
+              {description && <p>{description}</p>}
+              {genres.length > 0 && (
+                <div className="text-xs text-primary">{genres.join(" · ")}</div>
+              )}
+              {isError && (
+                <p className="watch-fallback-note" role="status">
+                  AniList details are unavailable; showing catalog information where possible.
+                </p>
+              )}
             </div>
           </div>
         </section>
@@ -168,25 +285,56 @@ function WatchPage() {
         <aside className="episode-panel">
           <div className="episode-head">
             <h2>
-              Episodes <span>{released}{media?.nextAiringEpisode ? ` / ${total}` : ""}</span>
+              Available episodes{" "}
+              <span>
+                {released === null
+                  ? "Count unavailable"
+                  : nextAiringEpisode !== null
+                    ? `${released} / ${total ?? released}`
+                    : released}
+              </span>
             </h2>
-            <Button variant="ghost" size="icon" onClick={() => setGrid(!grid)} aria-label="Toggle episode layout">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setGrid(!grid)}
+              aria-label="Toggle episode layout"
+              aria-pressed={!grid}
+            >
               {grid ? <List /> : <LayoutGrid />}
             </Button>
           </div>
-          <div className={grid ? "episode-grid" : "episode-list"}>
-            {episodes.map((n) => (
-              <button
-                key={n}
-                data-active={n === episode}
-                data-watched={watched.includes(n)}
-                onClick={() => goTo(n)}
-                aria-label={`Episode ${n}`}
-              >
-                {grid ? n : `Episode ${n}`}
-              </button>
-            ))}
-          </div>
+          {episodes.length > 0 ? (
+            <div
+              className={grid ? "episode-grid" : "episode-list"}
+              role="group"
+              aria-label="Available episodes"
+            >
+              {episodes.map((n) => (
+                <button
+                  key={n}
+                  data-active={n === episode}
+                  data-watched={watched.includes(n)}
+                  aria-current={n === episode ? "step" : undefined}
+                  onClick={() => goTo(n)}
+                  aria-label={`Episode ${n}${watched.includes(n) ? ", watched this session" : ""}`}
+                >
+                  {grid ? n : `Episode ${n}`}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="episode-unavailable">
+              {released === 0
+                ? "No episodes are available yet."
+                : "Episode availability could not be determined."}
+            </p>
+          )}
+          {episodeBoundaryMessage && (
+            <p className="episode-boundary" aria-live="polite">
+              {episodeBoundaryMessage}
+            </p>
+          )}
           {media?.nextAiringEpisode && (
             <p className="episode-next">
               <Bookmark /> Ep {media.nextAiringEpisode.episode} airs in{" "}
@@ -204,7 +352,12 @@ function WatchPage() {
               .map((n) => n.mediaRecommendation)
               .filter((r): r is NonNullable<typeof r> => !!r?.idMal)
               .map((r) => (
-                <Link key={r.id} to="/watch/$animeId" params={{ animeId: String(r.idMal) }} className="live-card">
+                <Link
+                  key={r.id}
+                  to="/watch/$animeId"
+                  params={{ animeId: String(r.idMal) }}
+                  className="live-card"
+                >
                   <div className="poster-frame">
                     <img src={r.coverImage.extraLarge ?? ""} alt={animeTitle(r)} loading="lazy" />
                   </div>

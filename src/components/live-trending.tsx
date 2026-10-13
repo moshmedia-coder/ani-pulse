@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { animeTitle, trendingQuery } from "@/lib/anilist";
 
 export function LiveTrending() {
-  const { data, isError, isPending } = useQuery(trendingQuery());
+  const { data, isError, isFetching, isPending } = useQuery(trendingQuery());
   const trackRef = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ start: true, end: false, overflow: false });
 
@@ -39,7 +39,7 @@ export function LiveTrending() {
             Trending now <ChevronRight />
           </h2>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground" role="status">
           Trending is temporarily unavailable. Please try again later.
         </p>
       </section>
@@ -52,8 +52,15 @@ export function LiveTrending() {
         <h2 id="live-trending-title">
           Trending now <ChevronRight />
         </h2>
-        <span className="live-badge">
-          <span className="status-dot" /> LIVE · AniList
+        <span className="live-badge" role="status" aria-live="polite">
+          <span className="status-dot" />
+          {isPending
+            ? "LOADING · AniList"
+            : isError
+              ? "CACHED · AniList"
+              : isFetching
+                ? "UPDATING · AniList"
+                : "TRENDING · AniList"}
         </span>
       </div>
       <div className="live-rail">
@@ -75,6 +82,7 @@ export function LiveTrending() {
           ref={trackRef}
           role="region"
           aria-label="Trending anime"
+          aria-busy={isPending}
           tabIndex={0}
           onScroll={measureTrack}
         >

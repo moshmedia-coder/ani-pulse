@@ -6,7 +6,7 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnimeHome } from "@/components/anime-home";
 import { animeCatalog, matchesAnimeSearch } from "@/lib/anime-data";
@@ -91,9 +91,26 @@ function successfulSearchFetch() {
   });
 }
 
+function detailFetch(media: unknown) {
+  return vi.fn(async (_url: string, init: RequestInit) => {
+    const body = JSON.parse(String(init.body)) as { query: string };
+    if (body.query.includes("Media(idMal:")) {
+      return jsonResponse({ data: { Media: media } });
+    }
+    return jsonResponse({ data: { Page: { media: [] } } });
+  });
+}
+
+function openFrierenDetails() {
+  fireEvent.click(
+    screen.getByRole("button", { name: "Details for Frieren: Beyond Journey's End" }),
+  );
+}
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  sessionStorage.clear();
 });
 
 describe("unified anime search", () => {
@@ -114,6 +131,7 @@ describe("unified anime search", () => {
 
     await renderHome(successfulSearchFetch());
     const search = screen.getByRole("textbox", { name: "Search anime" });
+
     fireEvent.change(search, { target: { value: "Frieren" } });
 
     expect(
@@ -226,5 +244,244 @@ describe("unified anime search", () => {
     document.body.dispatchEvent(ctrlShortcut);
     expect(document.activeElement).toBe(search);
     expect(ctrlShortcut.defaultPrevented).toBe(true);
+  }, 15000);
+});
+
+describe("anime detail dialog metadata", () => {
+  it("shows local details immediately while AniList loads and keeps the resume link", async () => {
+    let resolveDetails!: (response: Response) => void;
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { query: string };
+      if (body.query.includes("Media(idMal:")) {
+        return new Promise<Response>((resolve) => {
+          resolveDetails = resolve;
+        });
+      }
+      return jsonResponse({ data: { Page: { media: [] } } });
+    });
+    sessionStorage.setItem("anipulse-watched-52991", JSON.stringify([7]));
+    await renderHome(fetchMock);
+
+    openFrierenDetails();
+
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "Frieren: Beyond Journey's End" }),
+    ).toBeVisible();
+    expect(within(dialog).getByText(/After the demon king is defeated/)).toBeVisible();
+    expect(within(dialog).getByText("28 episodes")).toBeVisible();
+    expect(within(dialog).getByText("9.3")).toBeVisible();
+    expect(within(dialog).getByText("Adventure · Drama · Fantasy")).toBeVisible();
+    expect(within(dialog).getByText("Loading additional details…")).toBeVisible();
+    expect(within(dialog).getByRole("link", { name: "Watch now" })).toHaveAttribute(
+      "href",
+      "/watch/52991?ep=7",
+    );
+
+    await act(async () => resolveDetails(jsonResponse({ data: { Media: null } })));
+    expect(within(dialog).getByText(/After the demon king is defeated/)).toBeVisible();
+  }, 15000);
+
+  it("enriches local details with AniList metadata and reuses the cached result", async () => {
+    const fetchMock = detailFetch({
+      ...liveMedia[0],
+      title: { english: "Frieren: AniList Title", romaji: "Sousou no Frieren" },
+      description: "AniList synopsis<br>with details.",
+      bannerImage: "https://example.test/frieren-banner.jpg",
+      coverImage: { extraLarge: "https://example.test/frieren-cover.jpg", color: null },
+      episodes: 14,
+      averageScore: 87,
+      seasonYear: 2025,
+      format: "MOVIE",
+      status: "NOT_YET_RELEASED",
+      genres: ["Action", "Mystery"],
+    });
+    await renderHome(fetchMock);
+
+    openFrierenDetails();
+
+    const dialog = screen.getByRole("dialog");
+    expect(
+      await within(dialog).findByRole("heading", { name: "Frieren: AniList Title" }),
+    ).toBeVisible();
+    expect(within(dialog).getByText("AniList synopsis with details.")).toBeVisible();
+    expect(within(dialog).getByAltText("Frieren: AniList Title")).toHaveAttribute(
+      "src",
+      "https://example.test/frieren-cover.jpg",
+    );
+    expect(within(dialog).getByText("8.7")).toBeVisible();
+    expect(within(dialog).getByText("2025")).toBeVisible();
+    expect(within(dialog).getByText("14 episodes")).toBeVisible();
+    expect(within(dialog).getByText("MOVIE")).toBeVisible();
+    expect(within(dialog).getByText("Action · Mystery")).toBeVisible();
+    expect(within(dialog).getByText("Status: Not Yet Released")).toBeVisible();
+    expect(
+      fetchMock.mock.calls.filter((call) => String(call[1]?.body).includes("Media(idMal:")),
+    ).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    openFrierenDetails();
+
+    expect(
+      await within(screen.getByRole("dialog")).findByRole("heading", {
+        name: "Frieren: AniList Title",
+      }),
+    ).toBeVisible();
+    expect(
+      fetchMock.mock.calls.filter((call) => String(call[1]?.body).includes("Media(idMal:")),
+    ).toHaveLength(1);
+  }, 15000);
+
+  it("falls back field by field when AniList metadata is missing", async () => {
+    const fetchMock = detailFetch({
+      ...liveMedia[0],
+      title: { english: null, romaji: "" },
+      description: null,
+      bannerImage: null,
+      coverImage: { extraLarge: null, color: null },
+      episodes: null,
+      averageScore: null,
+      seasonYear: null,
+      format: null,
+      status: null,
+      genres: [],
+    });
+    await renderHome(fetchMock);
+
+    openFrierenDetails();
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "Frieren: Beyond Journey's End" }),
+    ).toBeVisible();
+    expect(within(dialog).getByText(/After the demon king is defeated/)).toBeVisible();
+    expect(within(dialog).getByAltText("Frieren: Beyond Journey's End")).toHaveAttribute(
+      "src",
+      "/images/anime/52991.jpg",
+    );
+    expect(within(dialog).getByText("TV")).toBeVisible();
+    expect(within(dialog).getByText("2023")).toBeVisible();
+    expect(within(dialog).getByText("28 episodes")).toBeVisible();
+    expect(within(dialog).getByText("9.3")).toBeVisible();
+    expect(within(dialog).getByText("Adventure · Drama · Fantasy")).toBeVisible();
+    expect(dialog.textContent).not.toMatch(/undefined|NaN|Status:/);
+  }, 15000);
+
+  it("keeps local details and Watch Now usable when AniList fails", async () => {
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { query: string };
+      if (body.query.includes("Media(idMal:")) return jsonResponse({}, 429);
+      return jsonResponse({ data: { Page: { media: [] } } });
+    });
+    await renderHome(fetchMock);
+
+    openFrierenDetails();
+
+    const dialog = screen.getByRole("dialog");
+    expect(
+      await within(dialog).findByText("AniList details unavailable; showing catalog information."),
+    ).toBeVisible();
+    expect(
+      within(dialog).getByRole("heading", { name: "Frieren: Beyond Journey's End" }),
+    ).toBeVisible();
+    expect(within(dialog).getByText(/After the demon king is defeated/)).toBeVisible();
+    expect(within(dialog).getByRole("link", { name: "Watch now" })).toHaveAttribute(
+      "href",
+      "/watch/52991",
+    );
+  }, 15000);
+});
+
+describe("catalog discovery controls", () => {
+  it("labels the catalog and exposes active genre and sort states", async () => {
+    const originalScrollIntoView = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "scrollIntoView",
+    );
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    });
+
+    try {
+      await renderHome(successfulSearchFetch());
+
+      const catalog = screen.getByRole("region", { name: "Browse the catalog" });
+      expect(
+        within(catalog).getByText(
+          "Search titles, explore genres, or sort the AniPulse collection.",
+        ),
+      ).toBeVisible();
+      expect(within(catalog).getByRole("status")).toHaveTextContent(
+        `${animeCatalog.length} of ${animeCatalog.length} titles`,
+      );
+
+      const genreGroup = screen.getByRole("group", { name: "Filter catalog by genre" });
+      const actionGenre = within(genreGroup).getByRole("button", { name: "Action" });
+      expect(actionGenre).toHaveAttribute("aria-pressed", "false");
+      fireEvent.click(actionGenre);
+
+      expect(actionGenre).toHaveAttribute("aria-pressed", "true");
+      const actionCount = animeCatalog.filter((anime) => anime.genres.includes("Action")).length;
+      expect(within(catalog).getByRole("status")).toHaveTextContent(
+        `${actionCount} of ${animeCatalog.length} titles`,
+      );
+
+      const sortGroup = within(catalog).getByRole("group", { name: "Sort catalog" });
+      const topRated = within(sortGroup).getByRole("button", { name: "TOP RATED" });
+      fireEvent.click(topRated);
+      expect(topRated).toHaveAttribute("aria-pressed", "true");
+    } finally {
+      if (originalScrollIntoView) {
+        Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScrollIntoView);
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+      }
+    }
+  }, 15000);
+
+  it("explains empty unified-search results and clears search and genre criteria", async () => {
+    const originalScrollIntoView = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "scrollIntoView",
+    );
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { query: string };
+      if (body.query.includes("search:")) {
+        return jsonResponse({ data: { Page: { media: [] } } });
+      }
+      return jsonResponse({ data: { Page: { media: [] } } });
+    });
+    try {
+      await renderHome(fetchMock);
+      const catalog = screen.getByRole("region", { name: "Browse the catalog" });
+      const genreGroup = screen.getByRole("group", { name: "Filter catalog by genre" });
+      fireEvent.click(within(genreGroup).getByRole("button", { name: "Action" }));
+      const search = screen.getByRole("textbox", { name: "Search anime" });
+
+      fireEvent.change(search, { target: { value: "no matching title" } });
+
+      expect(within(catalog).getByRole("button", { name: "Clear search & filters" })).toBeVisible();
+
+      fireEvent.click(within(catalog).getByRole("button", { name: "Clear search & filters" }));
+
+      expect(search).toHaveValue("");
+      expect(within(genreGroup).getByRole("button", { name: "All genres" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      expect(catalog).toBeVisible();
+    } finally {
+      if (originalScrollIntoView) {
+        Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScrollIntoView);
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+      }
+    }
   }, 15000);
 });

@@ -61,6 +61,23 @@ afterEach(() => {
 });
 
 describe("LiveTrending AniList failure states", () => {
+  it("announces loading while the trending request is pending", async () => {
+    const fetchMock = vi.fn(() => new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retryDelay: 0, gcTime: Infinity } },
+    });
+
+    await renderTrending(client);
+
+    expect(screen.getByRole("status")).toHaveTextContent("LOADING · AniList");
+    expect(screen.getByRole("region", { name: "Trending anime" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    client.clear();
+  });
+
   it("shows the unavailable message after the initial request fails", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}, 429));
     vi.stubGlobal("fetch", fetchMock);
@@ -70,7 +87,10 @@ describe("LiveTrending AniList failure states", () => {
 
     await renderTrending(client);
 
-    expect(await screen.findByText(/Trending is temporarily unavailable/)).toBeInTheDocument();
+    const unavailableStatus = await screen.findByText(
+      "Trending is temporarily unavailable. Please try again later.",
+    );
+    expect(unavailableStatus).toHaveAttribute("role", "status");
     expect(screen.queryByRole("region", { name: "Trending anime" })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledOnce();
     client.clear();
@@ -92,6 +112,7 @@ describe("LiveTrending AniList failure states", () => {
 
     expect(screen.getByRole("link", { name: "Watch Frieren" })).toBeInTheDocument();
     expect(screen.queryByText(/Trending is temporarily unavailable/)).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("CACHED · AniList");
     client.clear();
   });
 });

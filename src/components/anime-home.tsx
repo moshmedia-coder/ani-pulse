@@ -24,7 +24,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { animeCatalog, animeAwards, matchesAnimeSearch, type Anime } from "@/lib/anime-data";
-import { animeSearchQuery, animeTitle, type AniListSearchResult } from "@/lib/anilist";
+import {
+  animeSearchQuery,
+  animeTitle,
+  cleanDescription,
+  mediaByMalQuery,
+  type AniListSearchResult,
+} from "@/lib/anilist";
 import { useFeaturedCarousel } from "@/components/use-featured-carousel";
 import heroImage from "@/assets/frieren-hero.jpg";
 import soloHero from "@/assets/solo-leveling-hero.jpg";
@@ -244,6 +250,38 @@ export function AnimeHome() {
   const queryClient = useQueryClient();
   const genreRef = useRef<HTMLDivElement>(null);
   const [genreEdges, setGenreEdges] = useState({ start: true, end: false, overflow: false });
+  const selectedMalId =
+    selected && Number.isSafeInteger(selected.id) && selected.id > 0 ? selected.id : null;
+  const selectedMediaQuery = useQuery({
+    ...mediaByMalQuery(selectedMalId ?? 0),
+    enabled: selectedMalId !== null,
+  });
+  const detailMedia = selectedMediaQuery.data;
+  const detailTitle = selected
+    ? (detailMedia ? animeTitle(detailMedia).trim() : "") || selected.title
+    : "";
+  const aniListScore = detailMedia?.averageScore;
+  const detailScore =
+    aniListScore != null && Number.isFinite(aniListScore) ? aniListScore / 10 : selected?.score;
+  const aniListYear = detailMedia?.seasonYear;
+  const detailYear =
+    aniListYear != null && Number.isSafeInteger(aniListYear) && aniListYear > 0
+      ? aniListYear
+      : selected?.year;
+  const aniListEpisodes = detailMedia?.episodes;
+  const detailEpisodes =
+    aniListEpisodes != null && Number.isSafeInteger(aniListEpisodes) && aniListEpisodes > 0
+      ? aniListEpisodes
+      : selected?.episodes;
+  const detailFormat = detailMedia?.format?.trim() || selected?.type.trim() || "";
+  const detailGenres = detailMedia?.genres.map((item) => item.trim()).filter(Boolean).length
+    ? detailMedia.genres.map((item) => item.trim()).filter(Boolean)
+    : (selected?.genres ?? []);
+  const detailStatus = detailMedia?.status?.trim() || selected?.status.trim() || "";
+  const detailDescription =
+    cleanDescription(detailMedia?.description ?? null) || selected?.description.trim() || "";
+  const detailImage =
+    detailMedia?.coverImage.extraLarge || detailMedia?.bannerImage || selected?.image || "";
   const refreshWatchedEpisodes = useCallback(() => {
     const next: Record<number, number> = {};
     for (const anime of animeCatalog) {
@@ -547,6 +585,7 @@ export function AnimeHome() {
           </div>
         </section>
         <div className="genre-bar-wrap">
+          <span className="genre-bar-label">Explore by genre</span>
           {genreEdges.overflow && (
             <Button
               variant="outline"
@@ -560,11 +599,18 @@ export function AnimeHome() {
               <ChevronLeft />
             </Button>
           )}
-          <div className="genre-bar" ref={genreRef} aria-label="Genres" onScroll={measureGenres}>
+          <div
+            className="genre-bar"
+            ref={genreRef}
+            role="group"
+            aria-label="Filter catalog by genre"
+            onScroll={measureGenres}
+          >
             {genres.map((g) => (
               <Button
                 key={g}
                 variant={genre === g ? "default" : "secondary"}
+                aria-pressed={genre === g}
                 onClick={() => {
                   setGenre(g);
                   setPage(1);
@@ -609,14 +655,25 @@ export function AnimeHome() {
                 {bookmarked ? "Added" : "Make it a favorite"}
               </Button>
             </div>
-            <section ref={catalogRef} className="scroll-mt-28" aria-label="Anime catalog">
+            <section ref={catalogRef} className="scroll-mt-28" aria-labelledby="catalog-heading">
+              <div className="catalog-intro">
+                <div>
+                  <h2 id="catalog-heading">Browse the catalog</h2>
+                  <p>Search titles, explore genres, or sort the AniPulse collection.</p>
+                </div>
+                <p className="catalog-count" role="status" aria-live="polite">
+                  {filtered.length} of {animeCatalog.length} titles
+                </p>
+              </div>
               <div className="catalog-toolbar">
-                <div className="catalog-tabs">
+                <div className="catalog-tabs" role="group" aria-label="Sort catalog">
+                  <span className="catalog-sort-label">Sort by</span>
                   {["Newest", "Popular", "Top rated"].map((t) => (
                     <Button
                       key={t}
                       variant="ghost"
                       data-active={tab === t}
+                      aria-pressed={tab === t}
                       onClick={() => {
                         setTab(t);
                         setPage(1);
@@ -655,6 +712,13 @@ export function AnimeHome() {
                   </Button>
                 </div>
               </div>
+              {hasSearch && (
+                <div className="catalog-reset-row">
+                  <Button variant="ghost" size="sm" onClick={resetFilters}>
+                    Clear search &amp; filters <X />
+                  </Button>
+                </div>
+              )}
               {hasSearch && <h3 className="search-group-title">In your catalog</h3>}
               {visible.length ? (
                 <div className="anime-grid">
@@ -675,14 +739,14 @@ export function AnimeHome() {
                       ? "No anime watched this session"
                       : watchlistOnly
                         ? "Your watchlist is waiting"
-                        : "No anime found"}
+                        : "No titles match these browse options"}
                   </h3>
                   <p>
                     {historyOnly
                       ? "Anime with watched episodes will appear here."
                       : watchlistOnly
                         ? "Save an anime to see it here."
-                        : "Try another title or genre."}
+                        : "Change your search or genre, or clear the active filters."}
                   </p>
                   <Button variant="link" onClick={resetFilters}>
                     Browse all anime <ArrowRight />
@@ -889,18 +953,58 @@ export function AnimeHome() {
           if (!open) setSelected(null);
         }}
       >
-        <DialogContent className="max-w-xl">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-xl">
           {selected && (
             <>
-              <DialogTitle className="pr-5 text-2xl font-display">{selected.title}</DialogTitle>
+              <DialogTitle className="pr-5 text-2xl font-display">{detailTitle}</DialogTitle>
               <div className="detail-layout">
-                <img src={selected.image} alt={selected.title} width={140} height={203} />
+                {detailImage && (
+                  <img src={detailImage} alt={detailTitle} width={140} height={203} />
+                )}
                 <div className="detail-copy">
-                  <Metadata anime={selected} />
-                  <DialogDescription className="leading-relaxed">
-                    {selected.description}
-                  </DialogDescription>
-                  <div className="text-xs text-primary">{selected.genres.join(" · ")}</div>
+                  <div className="metadata">
+                    {detailFormat && <span>{detailFormat.replaceAll("_", " ")}</span>}
+                    {detailYear != null && <span>{detailYear}</span>}
+                    {detailEpisodes != null && (
+                      <span>
+                        <Subtitles />
+                        {detailEpisodes} episodes
+                      </span>
+                    )}
+                    {detailScore != null && Number.isFinite(detailScore) && (
+                      <span>
+                        <Star />
+                        {detailScore.toFixed(1)}
+                      </span>
+                    )}
+                    {detailStatus && (
+                      <span>
+                        Status:{" "}
+                        {detailStatus
+                          .replaceAll("_", " ")
+                          .toLowerCase()
+                          .replace(/\b\w/g, (letter) => letter.toUpperCase())}
+                      </span>
+                    )}
+                  </div>
+                  {detailDescription && (
+                    <DialogDescription className="leading-relaxed">
+                      {detailDescription}
+                    </DialogDescription>
+                  )}
+                  {detailGenres.length > 0 && (
+                    <div className="text-xs text-primary">{detailGenres.join(" · ")}</div>
+                  )}
+                  {selectedMediaQuery.isPending && (
+                    <p className="detail-query-state" role="status">
+                      Loading additional details…
+                    </p>
+                  )}
+                  {selectedMediaQuery.isError && !detailMedia && (
+                    <p className="detail-query-state" role="status">
+                      AniList details unavailable; showing catalog information.
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     <Button asChild>
                       <Link

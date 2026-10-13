@@ -151,7 +151,7 @@ export const mediaByMalQuery = (malId: number) =>
     staleTime: 30 * 60 * 1000,
     retry: shouldRetryAniListRequest,
     queryFn: async () => {
-      const data = await request<{ Media: AniListMedia }>(
+      const data = await request<{ Media: AniListMedia | null }>(
         `query ($id: Int) { Media(idMal: $id, type: ANIME) { ${BASE_FIELDS}
           studios(isMain: true) { nodes { name } }
           recommendations(perPage: 6, sort: RATING_DESC) { nodes { mediaRecommendation { id idMal title { english romaji } coverImage { extraLarge color } } } } } }`,
