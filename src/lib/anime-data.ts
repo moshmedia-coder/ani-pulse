@@ -12,6 +12,25 @@ export interface Anime {
   description: string;
 }
 
+export function matchesAnimeSearch(anime: Anime, query: string) {
+  const normalizedQuery = query.trim().replace(/\s+/g, " ").toLowerCase();
+  if (!normalizedQuery) return true;
+
+  return [
+    anime.title,
+    ...anime.genres,
+    anime.type,
+    anime.year,
+    anime.score,
+    anime.status,
+    anime.description,
+    anime.id,
+  ]
+    .join(" ")
+    .toLowerCase()
+    .includes(normalizedQuery);
+}
+
 export const animeAwards = [
   {
     animeId: 199,

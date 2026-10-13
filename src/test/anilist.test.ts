@@ -4,6 +4,7 @@ import {
   AniListGraphQLError,
   AniListHttpError,
   AniListNetworkError,
+  animeSearchQuery,
   mediaByMalQuery,
   trendingQuery,
 } from "@/lib/anilist";
@@ -43,6 +44,29 @@ afterEach(() => {
 });
 
 describe("AniList queries", () => {
+  it("normalizes live search terms, excludes adult media, and caches results", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ data: { Page: { media: [media] } } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createQueryClient();
+    const query = animeSearchQuery("  FRIEREN   Beyond  ");
+
+    expect(query.queryKey).toEqual(["anilist", "search", "frieren beyond"]);
+    expect(query.staleTime).toBe(5 * 60 * 1000);
+    await expect(client.fetchQuery(query)).resolves.toEqual([media]);
+    await expect(client.fetchQuery(animeSearchQuery("frieren beyond"))).resolves.toEqual([media]);
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string) as {
+      query: string;
+      variables: { search: string };
+    };
+    expect(body.variables.search).toBe("frieren beyond");
+    expect(body.query).toContain("isAdult: false");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    client.clear();
+  });
+
   it("returns successful trending and media responses and filters missing MAL IDs", async () => {
     const fetchMock = vi
       .fn()

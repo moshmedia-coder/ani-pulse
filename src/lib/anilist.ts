@@ -58,23 +58,44 @@ export interface AniListMedia {
   trailer: { id: string; site: string } | null;
   nextAiringEpisode?: { episode: number; timeUntilAiring: number } | null;
   recommendations?: {
-    nodes: { mediaRecommendation: Pick<AniListMedia, "id" | "idMal" | "title" | "coverImage"> | null }[];
+    nodes: {
+      mediaRecommendation: Pick<AniListMedia, "id" | "idMal" | "title" | "coverImage"> | null;
+    }[];
   };
 }
+
+export type AniListSearchResult = Pick<
+  AniListMedia,
+  | "id"
+  | "idMal"
+  | "title"
+  | "coverImage"
+  | "averageScore"
+  | "seasonYear"
+  | "format"
+  | "status"
+  | "genres"
+>;
 
 const BASE_FIELDS = `id idMal title { english romaji } description(asHtml: false) bannerImage
   coverImage { extraLarge color } episodes duration averageScore seasonYear format status genres
   trailer { id site } nextAiringEpisode { episode timeUntilAiring }`;
 
-async function request<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+async function request<T>(
+  query: string,
+  variables: Record<string, unknown>,
+  signal?: AbortSignal,
+): Promise<T> {
   let res: Response;
   try {
     res = await fetch(ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ query, variables }),
+      signal,
     });
-  } catch {
+  } catch (error) {
+    if (signal?.aborted) throw error;
     throw new AniListNetworkError();
   }
   if (!res.ok) throw new AniListHttpError(res.status, res.headers.get("Retry-After"));
@@ -87,7 +108,28 @@ async function request<T>(query: string, variables: Record<string, unknown>): Pr
 
 export const animeTitle = (m: Pick<AniListMedia, "title">) => m.title.english || m.title.romaji;
 export const cleanDescription = (text: string | null) =>
-  (text ?? "").replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  (text ?? "")
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+export const animeSearchQuery = (search: string) => {
+  const normalizedSearch = search.trim().replace(/\s+/g, " ").toLowerCase();
+  return queryOptions({
+    queryKey: ["anilist", "search", normalizedSearch],
+    staleTime: 5 * 60 * 1000,
+    retry: shouldRetryAniListRequest,
+    queryFn: async ({ signal }): Promise<AniListSearchResult[]> => {
+      const data = await request<{ Page: { media: AniListSearchResult[] } }>(
+        `query ($search: String) { Page(perPage: 20) { media(search: $search, type: ANIME, isAdult: false, sort: SEARCH_MATCH) { id idMal title { english romaji } coverImage { extraLarge color } averageScore seasonYear format status genres } } }`,
+        { search: normalizedSearch },
+        signal,
+      );
+      return data.Page.media;
+    },
+  });
+};
 
 export const trendingQuery = () =>
   queryOptions({

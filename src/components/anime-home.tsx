@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   Bookmark,
@@ -22,7 +23,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { animeCatalog, animeAwards, type Anime } from "@/lib/anime-data";
+import { animeCatalog, animeAwards, matchesAnimeSearch, type Anime } from "@/lib/anime-data";
+import { animeSearchQuery, animeTitle, type AniListSearchResult } from "@/lib/anilist";
 import { useFeaturedCarousel } from "@/components/use-featured-carousel";
 import heroImage from "@/assets/frieren-hero.jpg";
 import soloHero from "@/assets/solo-leveling-hero.jpg";
@@ -103,6 +105,60 @@ function AnimeCard({
     </article>
   );
 }
+
+function LiveSearchCard({ anime }: { anime: AniListSearchResult }) {
+  if (!anime.idMal) return null;
+  const status =
+    anime.status === "RELEASING"
+      ? "airing"
+      : anime.status === "FINISHED"
+        ? "finished"
+        : anime.status === "NOT_YET_RELEASED"
+          ? "upcoming"
+          : "";
+
+  return (
+    <article className="anime-card">
+      <Link
+        to="/watch/$animeId"
+        params={{ animeId: String(anime.idMal) }}
+        className="poster-button"
+        aria-label={`Watch ${animeTitle(anime)}`}
+      >
+        <div className="poster-frame">
+          {anime.coverImage.extraLarge && (
+            <img
+              src={anime.coverImage.extraLarge}
+              alt={animeTitle(anime)}
+              loading="lazy"
+              width={300}
+              height={435}
+            />
+          )}
+          {anime.format && <span className="poster-tag">{anime.format.replaceAll("_", " ")}</span>}
+          <span className="poster-play">
+            <Play />
+          </span>
+        </div>
+      </Link>
+      <div className="anime-title">
+        {status && <span className={`status-dot ${status}`} />}
+        <span title={animeTitle(anime)}>{animeTitle(anime)}</span>
+      </div>
+      <div className="metadata">
+        {anime.format && <span>{anime.format.replaceAll("_", " ")}</span>}
+        {anime.seasonYear != null && <span>{anime.seasonYear}</span>}
+        {anime.averageScore != null && (
+          <span>
+            <Star />
+            {(anime.averageScore / 10).toFixed(1)}
+          </span>
+        )}
+      </div>
+    </article>
+  );
+}
+
 function AnimeList({
   title,
   icon = "arrow",
@@ -170,6 +226,7 @@ const featuredImages = [heroImage, soloHero, demonHero, chainsawHero];
 const featuredIds = [52991, 52299, 51009, 44511];
 export function AnimeHome() {
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [genre, setGenre] = useState("All genres");
   const [tab, setTab] = useState("Newest");
   const [page, setPage] = useState(1);
@@ -184,6 +241,7 @@ export function AnimeHome() {
   const [moreSchedule, setMoreSchedule] = useState(false);
   const catalogRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
   const genreRef = useRef<HTMLDivElement>(null);
   const [genreEdges, setGenreEdges] = useState({ start: true, end: false, overflow: false });
   const refreshWatchedEpisodes = useCallback(() => {
@@ -205,10 +263,37 @@ export function AnimeHome() {
   );
   const current = featured[slide] ?? animeCatalog[0];
   const historyCount = Object.keys(watchedEpisodes).length;
+  const normalizedQuery = query.trim().replace(/\s+/g, " ").toLowerCase();
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedQuery(normalizedQuery), 300);
+    return () => window.clearTimeout(timeout);
+  }, [normalizedQuery]);
+  const liveResultsSuppressed = watchlistOnly || historyOnly;
+  const liveSearchEnabled =
+    normalizedQuery.length >= 2 && normalizedQuery === debouncedQuery && !liveResultsSuppressed;
+  const liveSearch = useQuery({
+    ...animeSearchQuery(debouncedQuery),
+    enabled: liveSearchEnabled,
+  });
+  useEffect(() => {
+    if (!liveSearchEnabled) {
+      void queryClient.cancelQueries({ queryKey: ["anilist", "search"] });
+    }
+  }, [liveSearchEnabled, queryClient]);
+  const localMalIds = useMemo(() => new Set(animeCatalog.map((anime) => anime.id)), []);
+  const liveOnlyResults = (liveSearch.data ?? []).filter(
+    (anime) =>
+      typeof anime.idMal === "number" &&
+      Number.isInteger(anime.idMal) &&
+      anime.idMal > 0 &&
+      !localMalIds.has(anime.idMal) &&
+      (genre === "All genres" || anime.genres.includes(genre)),
+  );
+  const hasSearch = normalizedQuery.length > 0;
   const filtered = useMemo(() => {
     let list = animeCatalog.filter(
       (a) =>
-        a.title.toLowerCase().includes(query.toLowerCase()) &&
+        matchesAnimeSearch(a, query) &&
         (genre === "All genres" || a.genres.includes(genre)) &&
         (!watchlistOnly || saved.includes(a.id)) &&
         (!historyOnly || watchedEpisodes[a.id] !== undefined),
@@ -250,6 +335,27 @@ export function AnimeHome() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refreshWatchedEpisodes]);
+  useEffect(() => {
+    function handleSearchShortcut(event: KeyboardEvent) {
+      const isSearchShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
+      if (!isSearchShortcut) return;
+
+      const target = event.target;
+      const isSearchInput = target === inputRef.current;
+      const isEditable =
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest("[contenteditable='true']") !== null ||
+          /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+      if (isEditable && !isSearchInput) return;
+
+      event.preventDefault();
+      inputRef.current?.focus();
+    }
+
+    window.addEventListener("keydown", handleSearchShortcut);
+    return () => window.removeEventListener("keydown", handleSearchShortcut);
+  }, []);
   function measureGenres() {
     const el = genreRef.current;
     if (!el) return;
@@ -307,7 +413,10 @@ export function AnimeHome() {
               size="icon"
               variant="ghost"
               aria-label="Clear search"
-              onClick={() => setQuery("")}
+              onClick={() => {
+                setQuery("");
+                setPage(1);
+              }}
             >
               <X />
             </Button>
@@ -451,12 +560,7 @@ export function AnimeHome() {
               <ChevronLeft />
             </Button>
           )}
-          <div
-            className="genre-bar"
-            ref={genreRef}
-            aria-label="Genres"
-            onScroll={measureGenres}
-          >
+          <div className="genre-bar" ref={genreRef} aria-label="Genres" onScroll={measureGenres}>
             {genres.map((g) => (
               <Button
                 key={g}
@@ -551,6 +655,7 @@ export function AnimeHome() {
                   </Button>
                 </div>
               </div>
+              {hasSearch && <h3 className="search-group-title">In your catalog</h3>}
               {visible.length ? (
                 <div className="anime-grid">
                   {visible.map((a) => (
@@ -562,7 +667,7 @@ export function AnimeHome() {
                     />
                   ))}
                 </div>
-              ) : (
+              ) : hasSearch ? null : (
                 <div className="empty-state">
                   <Search className="mx-auto mb-3" />
                   <h3>
@@ -584,8 +689,49 @@ export function AnimeHome() {
                   </Button>
                 </div>
               )}
+              {hasSearch && (
+                <div className="search-live-results" aria-live="polite">
+                  <h3 className="search-group-title">More from AniList</h3>
+                  {liveResultsSuppressed ? (
+                    <p className="text-xs text-muted-foreground">
+                      AniList results are not included while your Watchlist or History filter is
+                      active.
+                    </p>
+                  ) : normalizedQuery.length < 2 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Type at least two characters to search AniList.
+                    </p>
+                  ) : liveSearch.isError ? (
+                    <p className="text-xs text-muted-foreground">
+                      {visible.length > 0
+                        ? "AniList search is temporarily unavailable. Your catalog results are still available."
+                        : "AniList search is temporarily unavailable, and there are no matching titles in your catalog."}
+                    </p>
+                  ) : !liveSearchEnabled || liveSearch.isFetching ? (
+                    <p className="text-xs text-muted-foreground">Searching AniList…</p>
+                  ) : liveOnlyResults.length > 0 ? (
+                    <>
+                      {visible.length === 0 && (
+                        <p className="mb-3 text-xs text-muted-foreground">
+                          No matches in your catalog.
+                        </p>
+                      )}
+                      <div className="anime-grid">
+                        {liveOnlyResults.map((anime) => (
+                          <LiveSearchCard key={anime.id} anime={anime} />
+                        ))}
+                      </div>
+                    </>
+                  ) : visible.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      No anime found in your catalog or AniList.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No additional AniList results.</p>
+                  )}
+                </div>
+              )}
             </section>
-
           </div>
           <aside className="sidebar">
             <AnimeList
@@ -603,85 +749,90 @@ export function AnimeHome() {
           </aside>
         </div>
 
-            <div className="bottom-lists">
-              <AnimeList
-                title="Just finished"
-                items={[...animeCatalog].filter((a) => a.status === "finished")}
-                onSelect={selectAnime}
-                status="finished"
-              />
-              <AnimeList
-                title="Top movies"
-                items={animeCatalog.filter((a) => a.type === "MOVIE")}
-                onSelect={selectAnime}
-                status="finished"
-              />
-              <section className="list-section awards-section" aria-label="Anime Award">
-                <h2 className="section-heading"><ChevronRight />Anime Award</h2>
-                <div className="rank-list">
-                  {animeAwards.map((award) => {
-                    const anime = animeCatalog.find((item) => item.id === award.animeId);
-                    if (!anime) return null;
-                    return (
-                      <Button
-                        key={anime.id}
-                        variant="ghost"
-                        className="rank-item award-item"
-                        aria-label={`Details for ${anime.title}, ${award.recognition}`}
-                        onClick={() => selectAnime(anime)}
-                      >
-                        <img src={anime.image} alt="" loading="lazy" width={63} height={90} />
-                        <div className="rank-body">
-                          <div className="rank-title"><span className="status-dot upcoming" /><span className="name">{anime.title}</span></div>
-                          <p className="award-recognition">{award.recognition}</p>
-                          <span className="award-year">{award.year}</span>
-                        </div>
-                      </Button>
-                    );
-                  })}
-                </div>
-              </section>
+        <div className="bottom-lists">
+          <AnimeList
+            title="Just finished"
+            items={[...animeCatalog].filter((a) => a.status === "finished")}
+            onSelect={selectAnime}
+            status="finished"
+          />
+          <AnimeList
+            title="Top movies"
+            items={animeCatalog.filter((a) => a.type === "MOVIE")}
+            onSelect={selectAnime}
+            status="finished"
+          />
+          <section className="list-section awards-section" aria-label="Anime Award">
+            <h2 className="section-heading">
+              <ChevronRight />
+              Anime Award
+            </h2>
+            <div className="rank-list">
+              {animeAwards.map((award) => {
+                const anime = animeCatalog.find((item) => item.id === award.animeId);
+                if (!anime) return null;
+                return (
+                  <Button
+                    key={anime.id}
+                    variant="ghost"
+                    className="rank-item award-item"
+                    aria-label={`Details for ${anime.title}, ${award.recognition}`}
+                    onClick={() => selectAnime(anime)}
+                  >
+                    <img src={anime.image} alt="" loading="lazy" width={63} height={90} />
+                    <div className="rank-body">
+                      <div className="rank-title">
+                        <span className="status-dot upcoming" />
+                        <span className="name">{anime.title}</span>
+                      </div>
+                      <p className="award-recognition">{award.recognition}</p>
+                      <span className="award-year">{award.year}</span>
+                    </div>
+                  </Button>
+                );
+              })}
             </div>
+          </section>
+        </div>
         <div className="bottom-lists community-lists">
-              <section className="schedule">
-                <div className="schedule-head">
-                  <h2>Airing schedule</h2>
-                  <p className="schedule-label">THIS WEEK</p>
-                </div>
-                <div className="schedule-days">
-                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      key={d}
-                      className={d === day ? "selected" : ""}
-                      onClick={() => setDay(d)}
-                    >
-                      {d}
-                    </Button>
-                  ))}
-                </div>
-                <p className="schedule-date">
-                  {day}, October{" "}
-                  {5 + ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(day)} · Times in
-                  UTC
-                </p>
-                {scheduleItems.map((a, i) => (
-                  <div className="schedule-row" key={a.id}>
-                    <time>{String(14 + i).padStart(2, "0")}:30</time>
-                    <span>{a.title}</span>
-                    <em>EP {i + 1}</em>
-                  </div>
-                ))}
+          <section className="schedule">
+            <div className="schedule-head">
+              <h2>Airing schedule</h2>
+              <p className="schedule-label">THIS WEEK</p>
+            </div>
+            <div className="schedule-days">
+              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
                 <Button
                   variant="ghost"
-                  className="list-more"
-                  onClick={() => setMoreSchedule(!moreSchedule)}
+                  size="sm"
+                  key={d}
+                  className={d === day ? "selected" : ""}
+                  onClick={() => setDay(d)}
                 >
-                  {moreSchedule ? "Show less" : "Full schedule"}
-                  <ArrowRight />
+                  {d}
                 </Button>
-              </section>
+              ))}
+            </div>
+            <p className="schedule-date">
+              {day}, October {5 + ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(day)} ·
+              Times in UTC
+            </p>
+            {scheduleItems.map((a, i) => (
+              <div className="schedule-row" key={a.id}>
+                <time>{String(14 + i).padStart(2, "0")}:30</time>
+                <span>{a.title}</span>
+                <em>EP {i + 1}</em>
+              </div>
+            ))}
+            <Button
+              variant="ghost"
+              className="list-more"
+              onClick={() => setMoreSchedule(!moreSchedule)}
+            >
+              {moreSchedule ? "Show less" : "Full schedule"}
+              <ArrowRight />
+            </Button>
+          </section>
 
           <VoiceActors />
           <AnimeVote />
@@ -775,19 +926,36 @@ export function AnimeHome() {
           )}
         </DialogContent>
       </Dialog>
-      <AniPulseMenu open={menuOpen} onOpenChange={setMenuOpen} paused={paused} togglePaused={togglePaused} savedCount={saved.length} historyCount={historyCount} onNavigate={(view) => {
-        resetFilters();
-        setMenuOpen(false);
-        if (view === "Home") { setTab("Newest"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
-        if (view === "Schedule" || view === "Vote anime") { document.querySelector(view === "Schedule" ? ".schedule" : "#anime-vote")?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
-        if (view === "Trending") setTab("Popular");
-        if (view === "History") {
-          refreshWatchedEpisodes();
-          setHistoryOnly(true);
-        }
-        if (view === "Watchlist") setWatchlistOnly(true);
-        browse();
-      }} />
+      <AniPulseMenu
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        paused={paused}
+        togglePaused={togglePaused}
+        savedCount={saved.length}
+        historyCount={historyCount}
+        onNavigate={(view) => {
+          resetFilters();
+          setMenuOpen(false);
+          if (view === "Home") {
+            setTab("Newest");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            return;
+          }
+          if (view === "Schedule" || view === "Vote anime") {
+            document
+              .querySelector(view === "Schedule" ? ".schedule" : "#anime-vote")
+              ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            return;
+          }
+          if (view === "Trending") setTab("Popular");
+          if (view === "History") {
+            refreshWatchedEpisodes();
+            setHistoryOnly(true);
+          }
+          if (view === "Watchlist") setWatchlistOnly(true);
+          browse();
+        }}
+      />
     </>
   );
 }
