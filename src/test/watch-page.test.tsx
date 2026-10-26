@@ -19,7 +19,7 @@ const frieren = {
   format: "TV",
   status: "FINISHED",
   genres: ["Adventure", "Drama"],
-  trailer: { id: "preview-id", site: "youtube" },
+  trailer: { id: "tR8YH0G67Rk", site: "youtube" },
   nextAiringEpisode: null,
   studios: { nodes: [{ name: "Studio Example" }] },
   recommendations: { nodes: [] },
@@ -102,7 +102,7 @@ describe("watch experience", () => {
 
     expect(await screen.findByTitle("Frieren: Beyond Journey's End episode 2")).toHaveAttribute(
       "src",
-      "https://www.youtube-nocookie.com/embed/preview-id?autoplay=1&rel=0",
+      "https://www.youtube-nocookie.com/embed/tR8YH0G67Rk?autoplay=1&rel=0",
     );
     expect(JSON.parse(sessionStorage.getItem(watchedEpisodesStorageKey(52991)) ?? "[]")).toEqual([
       2,
@@ -130,6 +130,25 @@ describe("watch experience", () => {
       ),
     ).toBeVisible();
     expect(sessionStorage.getItem(watchedEpisodesStorageKey(52991))).toBeNull();
+  });
+
+  it("rejects invalid trailer IDs and unsupported trailer sites", async () => {
+    for (const trailer of [
+      { id: "not-a-video-id", site: "youtube" },
+      { id: "tR8YH0G67Rk", site: "dailymotion" },
+    ]) {
+      await renderWatch("/watch/52991", jsonResponse({ data: { Media: { ...frieren, trailer } } }));
+      expect(
+        await screen.findByRole("button", {
+          name: "Trailer preview unavailable for episode 1",
+        }),
+      ).toBeDisabled();
+      expect(
+        screen.queryByTitle("Frieren: Beyond Journey's End episode 1"),
+      ).not.toBeInTheDocument();
+      expect(sessionStorage.getItem(watchedEpisodesStorageKey(52991))).toBeNull();
+      cleanup();
+    }
   });
 
   it("keeps local anime information available after AniList fails", async () => {
@@ -186,5 +205,209 @@ describe("watch experience", () => {
     fireEvent.click(theaterButton);
     expect(screen.getByRole("button", { name: "Default" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("main")).toHaveClass("is-theater");
+  });
+
+  it("renders anime facts, language-specific voice actors, and navigable discovery lists", async () => {
+    const recommendation = {
+      id: 2,
+      idMal: 999001,
+      title: { english: "Recommended Series", romaji: "Recommended Series" },
+      coverImage: { extraLarge: "https://example.test/recommendation.jpg", color: null },
+      format: "TV",
+      seasonYear: 2024,
+      averageScore: 86,
+      isAdult: false,
+    };
+    const longRecommendation = {
+      ...recommendation,
+      id: 4,
+      idMal: 999003,
+      title: {
+        english: "A Recommendation With An Exceptionally Long Title",
+        romaji: "長いタイトルのおすすめ",
+      },
+      coverImage: { extraLarge: null, color: null },
+      format: null,
+      seasonYear: null,
+      averageScore: null,
+    };
+    const related = { ...recommendation, id: 3, idMal: 999002, format: "OVA" };
+    const { fetchMock } = await renderWatch(
+      "/watch/52991",
+      jsonResponse({
+        data: {
+          Media: {
+            ...frieren,
+            season: "FALL",
+            startDate: { year: 2023, month: 9, day: 29 },
+            endDate: { year: 2024, month: 3, day: 22 },
+            countryOfOrigin: "JP",
+            isAdult: false,
+            characters: {
+              edges: [
+                {
+                  role: "MAIN",
+                  node: {
+                    id: 10,
+                    name: { full: "Fern" },
+                    image: { large: "https://example.test/fern.jpg" },
+                  },
+                  voiceActors: [{ id: 11, name: { full: "Atsumi Tanezaki" } }],
+                  englishVoiceActors: [{ id: 12, name: { full: "Jill Harris" } }],
+                },
+                {
+                  role: null,
+                  node: {
+                    id: 13,
+                    name: { full: "A Character With An Exceptionally Long Name" },
+                    image: { large: null },
+                  },
+                  voiceActors: [],
+                  englishVoiceActors: [],
+                },
+                {
+                  role: "SUPPORTING",
+                  node: {
+                    id: 14,
+                    name: { full: "Stark" },
+                    image: { large: "https://example.test/stark.jpg" },
+                  },
+                  voiceActors: [{ id: 15, name: { full: "Chiaki Kobayashi" } }],
+                  englishVoiceActors: [],
+                },
+                {
+                  role: "SUPPORTING",
+                  node: {
+                    id: 16,
+                    name: { full: "Sein" },
+                    image: { large: null },
+                  },
+                  voiceActors: [],
+                  englishVoiceActors: [{ id: 17, name: { full: "Christopher Guerrero" } }],
+                },
+              ],
+            },
+            relations: {
+              edges: [{ relationType: "PREQUEL", node: related }],
+            },
+            recommendations: {
+              nodes: [
+                { mediaRecommendation: recommendation },
+                { mediaRecommendation: longRecommendation },
+                {
+                  mediaRecommendation: {
+                    ...recommendation,
+                    id: 5,
+                    idMal: 999004,
+                    title: { english: "Another Series", romaji: "Another Series" },
+                  },
+                },
+                {
+                  mediaRecommendation: {
+                    ...recommendation,
+                    id: 6,
+                    idMal: 999005,
+                    title: { english: "One More Series", romaji: "One More Series" },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      }),
+    );
+
+    expect(await screen.findByText("Sousou no Frieren")).toBeVisible();
+    expect(screen.getByText("2023-09-29 – 2024-03-22")).toBeVisible();
+    expect(screen.getByText("Japan")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Characters & Voice Actors" })).toBeVisible();
+    expect(screen.getByText("Atsumi Tanezaki")).toBeVisible();
+    expect(screen.getByText("Jill Harris")).toBeVisible();
+    expect(screen.getByText("Chiaki Kobayashi")).toBeVisible();
+    expect(screen.getByText("Christopher Guerrero")).toBeVisible();
+    const characters = screen.getByRole("region", { name: "Characters and voice actors" });
+    expect(characters.querySelector(".watch-character-grid")).not.toBeNull();
+    expect(characters.querySelector(".watch-character-rail")).toBeNull();
+    expect(within(characters).getAllByRole("article")).toHaveLength(4);
+    expect(within(characters).getByText("Voice actor unavailable")).toBeVisible();
+    expect(
+      within(characters).getByText("A Character With An Exceptionally Long Name"),
+    ).toBeVisible();
+    const relatedRail = screen.getByRole("region", { name: "Related Anime" });
+    const relatedLink = within(relatedRail).getByRole("link", { name: /Recommended Series/ });
+    expect(relatedLink).toHaveAttribute("href", "/watch/999002");
+    const recommendations = screen.getByRole("region", { name: "You Might Also Like" });
+    expect(recommendations.querySelector(".watch-anime-grid")).not.toBeNull();
+    expect(recommendations.querySelector(".watch-anime-rail")).toBeNull();
+    expect(within(recommendations).getAllByRole("link")).toHaveLength(4);
+    expect(
+      within(recommendations).getByRole("link", { name: /Recommended Series/ }),
+    ).toHaveAttribute("href", "/watch/999001");
+    expect(
+      within(recommendations).getByRole("link", {
+        name: /A Recommendation With An Exceptionally Long Title/,
+      }),
+    ).toHaveAttribute("href", "/watch/999003");
+    expect(
+      within(within(recommendations).getByRole("link", { name: /Recommended Series/ })).getByText(
+        "8.6",
+      ),
+    ).toBeVisible();
+    expect(
+      within(within(recommendations).getByRole("link", { name: /Recommended Series/ })).getByText(
+        "TV · 2024",
+      ),
+    ).toBeVisible();
+    expect(within(recommendations).getByText("Details unavailable")).toBeVisible();
+
+    const requestBody = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string) as {
+      query: string;
+    };
+    expect(requestBody.query).toContain("characters(perPage: 12");
+    expect(requestBody.query).toContain("voiceActors(language: JAPANESE)");
+    expect(requestBody.query).toContain("voiceActors(language: ENGLISH)");
+    expect(requestBody.query).toContain("relations { edges");
+    expect(requestBody.query).toContain("isAdult: false");
+  });
+
+  it("shows graceful empty character and discovery states when AniList has no data", async () => {
+    await renderWatch("/watch/52991", jsonResponse({ data: { Media: frieren } }));
+
+    expect(
+      await screen.findByText("Character details are not listed for this title yet."),
+    ).toBeVisible();
+    expect(screen.getByText("Related anime is not listed for this title yet.")).toBeVisible();
+    expect(screen.getByText("Recommendations are not available for this title yet.")).toBeVisible();
+  });
+
+  it("keeps local metadata visible and does not invent missing facts", async () => {
+    await renderWatch(
+      "/watch/52991",
+      jsonResponse({
+        data: {
+          Media: {
+            ...frieren,
+            genres: [],
+            seasonYear: null,
+            format: null,
+            status: null,
+            episodes: null,
+            duration: null,
+            averageScore: null,
+            studios: { nodes: [] },
+            startDate: { year: null, month: null, day: null },
+            endDate: { year: null, month: null, day: null },
+            countryOfOrigin: null,
+            isAdult: null,
+          },
+        },
+      }),
+    );
+
+    expect(await screen.findByText("Fantasy")).toBeVisible();
+    expect(screen.getByText("Drama")).toBeVisible();
+    expect(screen.getByText("Episodes")).toBeVisible();
+    expect(screen.queryByText("Studio Example")).not.toBeInTheDocument();
+    expect(screen.queryByText("Japan")).not.toBeInTheDocument();
   });
 });

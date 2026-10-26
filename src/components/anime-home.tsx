@@ -8,7 +8,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Clock3,
   Command,
   Flame,
   Info,
@@ -23,57 +22,152 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { animeCatalog, animeAwards, matchesAnimeSearch, type Anime } from "@/lib/anime-data";
+import { animeCatalog, matchesAnimeSearch, type Anime } from "@/lib/anime-data";
 import {
-  animeSearchQuery,
+  animeDiscoveryQuery,
   animeTitle,
   cleanDescription,
+  recentEndDateCutoff,
   mediaByMalQuery,
-  type AniListSearchResult,
+  trendingQuery,
+  type AniListAnimeSort,
+  type AniListMedia,
 } from "@/lib/anilist";
 import { useFeaturedCarousel } from "@/components/use-featured-carousel";
-import heroImage from "@/assets/frieren-hero.jpg";
-import soloHero from "@/assets/solo-leveling-hero.jpg";
-import demonHero from "@/assets/demon-slayer-hero.jpg";
-import chainsawHero from "@/assets/chainsaw-man-hero.jpg";
 import { Brand } from "@/components/anipulse-brand";
 import { AniPulseMenu } from "@/components/anipulse-menu";
 import { AnimeVote } from "@/components/anime-vote";
+import { AnimeAwards } from "@/components/anime-awards";
 import { VoiceActors } from "@/components/voice-actors";
 import { LiveTrending } from "@/components/live-trending";
-import { Link } from "@tanstack/react-router";
-import { readWatchedEpisodes, WATCH_HISTORY_CHANGE_EVENT } from "@/lib/watch-history";
+import { AiringSchedule } from "@/components/airing-schedule";
+import { Link, useNavigate } from "@tanstack/react-router";
+import {
+  readWatchedAnimeIds,
+  readWatchedEpisodes,
+  WATCH_HISTORY_CHANGE_EVENT,
+} from "@/lib/watch-history";
 
-function Metadata({ anime, hero = false }: { anime: Anime; hero?: boolean }) {
+type SpotlightAnime = {
+  id: number;
+  title: string;
+  image: string;
+  poster: string | null;
+  score: number | null;
+  year: number | null;
+  episodes: number | null;
+  genres: string[];
+  type: string | null;
+  description: string | null;
+  status: string;
+};
+
+const SPOTLIGHT_INITIAL_MAL_ID = 64340;
+const SPOTLIGHT_ITEM_COUNT = 7;
+
+function toSpotlightAnime(media: AniListMedia): SpotlightAnime | null {
+  const image = media.bannerImage || media.coverImage.extraLarge;
+  const title = animeTitle(media).trim();
+  if (!media.idMal || !Number.isSafeInteger(media.idMal) || media.idMal <= 0 || !image || !title) {
+    return null;
+  }
+
+  return {
+    id: media.idMal,
+    title,
+    image,
+    poster: media.coverImage.extraLarge,
+    score:
+      media.averageScore != null && Number.isFinite(media.averageScore)
+        ? media.averageScore / 10
+        : null,
+    year: media.startDate?.year ?? media.seasonYear ?? null,
+    episodes:
+      media.episodes != null && Number.isSafeInteger(media.episodes) && media.episodes > 0
+        ? media.episodes
+        : null,
+    genres: media.genres.map((genre) => genre.trim()).filter(Boolean),
+    type: media.format?.replaceAll("_", " ") ?? null,
+    description: cleanDescription(media.description) || null,
+    status:
+      media.status === "FINISHED"
+        ? "finished"
+        : media.status === "RELEASING"
+          ? "airing"
+          : media.status === "NOT_YET_RELEASED"
+            ? "upcoming"
+            : "",
+  };
+}
+
+function toHomepageAnime(media: AniListMedia[]) {
+  const unique = new Map<number, SpotlightAnime>();
+  for (const item of media) {
+    const anime = toSpotlightAnime(item);
+    if (anime && !unique.has(anime.id)) unique.set(anime.id, anime);
+  }
+  return [...unique.values()];
+}
+
+function Metadata({
+  anime,
+  hero = false,
+  showGenres = false,
+  showEpisodes = true,
+}: {
+  anime: SpotlightAnime | Anime;
+  hero?: boolean;
+  showGenres?: boolean;
+  showEpisodes?: boolean;
+}) {
   return (
     <div className="metadata">
-      <span>{anime.type}</span>
-      {!hero && <span>{anime.year}</span>}
-      <span>
-        <Subtitles />
-        {anime.episodes}
-      </span>
-      <span>
-        <Star />
-        {anime.score}
-      </span>
-      {hero && (
+      {anime.type && <span>{anime.type}</span>}
+      {anime.year != null && <span>{anime.year}</span>}
+      {(hero || showGenres) && anime.genres.length > 0 && <span>{anime.genres.join(" · ")}</span>}
+      {showEpisodes && anime.episodes != null && (
         <span>
-          <Clock3 />
-          24 min
+          <Subtitles />
+          {anime.episodes}
+        </span>
+      )}
+      {anime.score != null && (
+        <span>
+          <Star />
+          {anime.score}
         </span>
       )}
     </div>
   );
 }
+
+function matchesHomeSearch(anime: Anime | SpotlightAnime, query: string) {
+  if ("popularity" in anime) return matchesAnimeSearch(anime, query);
+  const normalizedQuery = query.trim().replace(/\s+/g, " ").toLowerCase();
+  if (!normalizedQuery) return true;
+  return [
+    anime.title,
+    ...anime.genres,
+    anime.type,
+    anime.year,
+    anime.score,
+    anime.status,
+    anime.description,
+    anime.id,
+  ]
+    .join(" ")
+    .toLowerCase()
+    .includes(normalizedQuery);
+}
+
 function AnimeCard({
   anime,
   onSelect,
   resumeEpisode,
 }: {
-  anime: Anime;
-  onSelect: (anime: Anime) => void;
-  resumeEpisode?: number;
+  anime: Anime | SpotlightAnime;
+  onSelect: (anime: Anime | SpotlightAnime) => void;
+  resumeEpisode: number | undefined;
 }) {
   return (
     <article className="anime-card">
@@ -84,7 +178,13 @@ function AnimeCard({
         aria-label={`Details for ${anime.title}`}
       >
         <div className="poster-frame">
-          <img src={anime.image} alt={anime.title} loading="lazy" width={300} height={435} />
+          <img
+            src={"poster" in anime ? (anime.poster ?? anime.image) : anime.image}
+            alt={anime.title}
+            loading="lazy"
+            width={300}
+            height={435}
+          />
           <span className="poster-tag">SUB · DUB</span>
           <span className="poster-play">
             <Play />
@@ -95,6 +195,9 @@ function AnimeCard({
         <span className={`status-dot ${anime.status}`} />
         <span title={anime.title}>{anime.title}</span>
       </div>
+      {!("popularity" in anime) && anime.description && (
+        <p className="anime-synopsis">{cleanDescription(anime.description)}</p>
+      )}
       {resumeEpisode !== undefined && (
         <Link
           to="/watch/$animeId"
@@ -107,60 +210,7 @@ function AnimeCard({
           Resume Ep {resumeEpisode}
         </Link>
       )}
-      <Metadata anime={anime} />
-    </article>
-  );
-}
-
-function LiveSearchCard({ anime }: { anime: AniListSearchResult }) {
-  if (!anime.idMal) return null;
-  const status =
-    anime.status === "RELEASING"
-      ? "airing"
-      : anime.status === "FINISHED"
-        ? "finished"
-        : anime.status === "NOT_YET_RELEASED"
-          ? "upcoming"
-          : "";
-
-  return (
-    <article className="anime-card">
-      <Link
-        to="/watch/$animeId"
-        params={{ animeId: String(anime.idMal) }}
-        className="poster-button"
-        aria-label={`Watch ${animeTitle(anime)}`}
-      >
-        <div className="poster-frame">
-          {anime.coverImage.extraLarge && (
-            <img
-              src={anime.coverImage.extraLarge}
-              alt={animeTitle(anime)}
-              loading="lazy"
-              width={300}
-              height={435}
-            />
-          )}
-          {anime.format && <span className="poster-tag">{anime.format.replaceAll("_", " ")}</span>}
-          <span className="poster-play">
-            <Play />
-          </span>
-        </div>
-      </Link>
-      <div className="anime-title">
-        {status && <span className={`status-dot ${status}`} />}
-        <span title={animeTitle(anime)}>{animeTitle(anime)}</span>
-      </div>
-      <div className="metadata">
-        {anime.format && <span>{anime.format.replaceAll("_", " ")}</span>}
-        {anime.seasonYear != null && <span>{anime.seasonYear}</span>}
-        {anime.averageScore != null && (
-          <span>
-            <Star />
-            {(anime.averageScore / 10).toFixed(1)}
-          </span>
-        )}
-      </div>
+      <Metadata anime={anime} showGenres={!("popularity" in anime)} />
     </article>
   );
 }
@@ -171,46 +221,84 @@ function AnimeList({
   items,
   onSelect,
   status,
+  emptyMessage,
+  isPending = false,
+  isError = false,
+  onRetry,
 }: {
   title: string;
   icon?: string;
-  items: Anime[];
-  onSelect: (anime: Anime) => void;
+  items: (Anime | SpotlightAnime)[];
+  onSelect: (anime: Anime | SpotlightAnime) => void;
   status?: string;
+  emptyMessage?: string;
+  isPending?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <section className="list-section">
+    <section className="list-section" aria-label={title}>
       <h2 className="section-heading">
         {icon === "flame" ? <Flame /> : <ChevronRight />}
         {title}
       </h2>
       <div className="rank-list">
-        {items.slice(0, expanded ? items.length : 4).map((anime, i) => (
-          <Button
-            key={anime.id}
-            variant="ghost"
-            className="rank-item"
-            onClick={() => onSelect(anime)}
-          >
-            <img src={anime.image} alt="" loading="lazy" width={63} height={90} />
-            <div className="rank-body">
-              <div className="rank-title">
-                <span className={`status-dot ${status ?? anime.status}`} />
-                <span className="name">{anime.title}</span>
+        {isPending && items.length === 0 ? (
+          <p className="detail-query-state" role="status">
+            Loading AniList results…
+          </p>
+        ) : items.length > 0 ? (
+          items.slice(0, expanded ? items.length : 4).map((anime, i) => (
+            <Button
+              key={anime.id}
+              variant="ghost"
+              className="rank-item"
+              onClick={() => onSelect(anime)}
+            >
+              <img
+                src={"poster" in anime ? (anime.poster ?? anime.image) : anime.image}
+                alt=""
+                loading="lazy"
+                width={63}
+                height={90}
+              />
+              <div className="rank-body">
+                <div className="rank-title">
+                  <span className={`status-dot ${status ?? anime.status}`} />
+                  <span className="name">{anime.title}</span>
+                </div>
+                <Metadata anime={anime} showEpisodes={false} />
               </div>
-              <Metadata anime={anime} />
-            </div>
-            {icon === "flame" && (
-              <span className="rank-number">{String(i + 1).padStart(2, "0")}</span>
-            )}
-          </Button>
-        ))}
+              {icon === "flame" && (
+                <span className="rank-number">{String(i + 1).padStart(2, "0")}</span>
+              )}
+            </Button>
+          ))
+        ) : (
+          <p className="detail-query-state" role="status">
+            {isError
+              ? "AniList results are temporarily unavailable."
+              : (emptyMessage ?? "No anime to show yet.")}
+          </p>
+        )}
       </div>
-      <Button variant="secondary" className="list-more" onClick={() => setExpanded(!expanded)}>
-        {expanded ? "Show less" : "View more"}
-        <ChevronDown className={expanded ? "rotate-180" : ""} />
-      </Button>
+      {isError && items.length > 0 && (
+        <p className="detail-query-state" role="status">
+          AniList could not refresh these results; showing cached titles.
+        </p>
+      )}
+      {isError && onRetry && (
+        <Button variant="link" size="sm" onClick={onRetry}>
+          Try again
+        </Button>
+      )}
+      {items.length > 4 && (
+        <Button variant="secondary" className="list-more" onClick={() => setExpanded(!expanded)}>
+          {expanded ? "Show less" : "View more"}
+          <ChevronDown className={expanded ? "rotate-180" : ""} />
+        </Button>
+      )}
     </section>
   );
 }
@@ -228,23 +316,22 @@ const genres = [
   "Sports",
   "Slice of Life",
 ];
-const featuredImages = [heroImage, soloHero, demonHero, chainsawHero];
-const featuredIds = [52991, 52299, 51009, 44511];
 export function AnimeHome() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [genre, setGenre] = useState("All genres");
   const [tab, setTab] = useState("Newest");
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<Anime | null>(null);
+  const [selected, setSelected] = useState<Anime | SpotlightAnime | null>(null);
   const [saved, setSaved] = useState<number[]>([]);
+  const [savedSpotlight, setSavedSpotlight] = useState<SpotlightAnime[]>([]);
   const [watchedEpisodes, setWatchedEpisodes] = useState<Record<number, number>>({});
+  const [watchedAnimeIds, setWatchedAnimeIds] = useState<number[]>([]);
   const [historyOnly, setHistoryOnly] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [watchlistOnly, setWatchlistOnly] = useState(false);
-  const [day, setDay] = useState("Thu");
-  const [moreSchedule, setMoreSchedule] = useState(false);
   const catalogRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
@@ -256,6 +343,7 @@ export function AnimeHome() {
     ...mediaByMalQuery(selectedMalId ?? 0),
     enabled: selectedMalId !== null,
   });
+  const featuredQuery = useQuery(trendingQuery());
   const detailMedia = selectedMediaQuery.data;
   const detailTitle = selected
     ? (detailMedia ? animeTitle(detailMedia).trim() : "") || selected.title
@@ -273,75 +361,199 @@ export function AnimeHome() {
     aniListEpisodes != null && Number.isSafeInteger(aniListEpisodes) && aniListEpisodes > 0
       ? aniListEpisodes
       : selected?.episodes;
-  const detailFormat = detailMedia?.format?.trim() || selected?.type.trim() || "";
+  const detailFormat = detailMedia?.format?.trim() || selected?.type?.trim() || "";
   const detailGenres = detailMedia?.genres.map((item) => item.trim()).filter(Boolean).length
     ? detailMedia.genres.map((item) => item.trim()).filter(Boolean)
     : (selected?.genres ?? []);
   const detailStatus = detailMedia?.status?.trim() || selected?.status.trim() || "";
   const detailDescription =
-    cleanDescription(detailMedia?.description ?? null) || selected?.description.trim() || "";
+    cleanDescription(detailMedia?.description ?? null) || selected?.description?.trim() || "";
   const detailImage =
     detailMedia?.coverImage.extraLarge || detailMedia?.bannerImage || selected?.image || "";
   const refreshWatchedEpisodes = useCallback(() => {
     const next: Record<number, number> = {};
-    for (const anime of animeCatalog) {
-      const episodes = readWatchedEpisodes(anime.id);
+    const animeIds = readWatchedAnimeIds();
+    setWatchedAnimeIds(animeIds);
+    for (const animeId of animeIds) {
+      const episodes = readWatchedEpisodes(animeId);
       if (episodes.length > 0) {
-        next[anime.id] = episodes.reduce((latest, episode) => Math.max(latest, episode), 0);
+        next[animeId] = episodes.reduce((latest, episode) => Math.max(latest, episode), 0);
       }
     }
     setWatchedEpisodes(next);
   }, []);
-  const featured = featuredIds
-    .map((id) => animeCatalog.find((a) => a.id === id))
-    .filter((a): a is Anime => Boolean(a));
-  const { slide, fading, paused, move, togglePaused } = useFeaturedCarousel(
-    featured.length,
-    selected !== null || menuOpen,
+  const localMalIds = useMemo(() => new Set(animeCatalog.map((anime) => anime.id)), []);
+  const liveFeatured = Array.from(
+    new Map(
+      (featuredQuery.data ?? [])
+        .filter((media) => media.idMal != null && !localMalIds.has(media.idMal))
+        .map((media) => toSpotlightAnime(media))
+        .filter((media): media is SpotlightAnime => media !== null)
+        .map((media) => [media.id, media]),
+    ).values(),
   );
-  const current = featured[slide] ?? animeCatalog[0];
+  const initialLiveFeatured = liveFeatured.find((anime) => anime.id === SPOTLIGHT_INITIAL_MAL_ID);
+  const orderedLiveFeatured = initialLiveFeatured
+    ? [
+        initialLiveFeatured,
+        ...liveFeatured.filter((anime) => anime.id !== SPOTLIGHT_INITIAL_MAL_ID),
+      ]
+    : liveFeatured;
+  const activityIds = new Set([...watchedAnimeIds, ...saved]);
+  const recommendationPreferences = new Map<string, number>();
+  for (const id of activityIds) {
+    const local = animeCatalog.find((anime) => anime.id === id);
+    const cached = queryClient.getQueryData<AniListMedia>(mediaByMalQuery(id).queryKey);
+    const savedAnime = savedSpotlight.find((anime) => anime.id === id);
+    const genres = cached?.genres.length
+      ? cached.genres
+      : (savedAnime?.genres ?? local?.genres ?? []);
+    for (const genre of genres) {
+      const normalizedGenre = genre.trim();
+      if (normalizedGenre) {
+        recommendationPreferences.set(
+          normalizedGenre,
+          (recommendationPreferences.get(normalizedGenre) ?? 0) + 1,
+        );
+      }
+    }
+  }
+  const hasRecommendationPreferences = recommendationPreferences.size > 0;
+  const activityExcludedIds = new Set([...watchedAnimeIds, ...saved]);
+  const recommendationItems = Array.from(
+    new Map(
+      (featuredQuery.data ?? [])
+        .map((media) => toSpotlightAnime(media))
+        .filter(
+          (anime): anime is SpotlightAnime => anime !== null && !activityExcludedIds.has(anime.id),
+        )
+        .map((anime) => [anime.id, anime]),
+    ).values(),
+  )
+    .map((anime) => ({
+      anime,
+      preferenceScore: anime.genres.reduce(
+        (score, genre) => score + (recommendationPreferences.get(genre) ?? 0),
+        0,
+      ),
+    }))
+    .filter(({ preferenceScore }) => !hasRecommendationPreferences || preferenceScore > 0)
+    .sort(
+      (a, b) =>
+        b.preferenceScore - a.preferenceScore || (b.anime.score ?? 0) - (a.anime.score ?? 0),
+    )
+    .map(({ anime }) => anime);
+  const recommendationTitle = hasRecommendationPreferences
+    ? "Recommended for you"
+    : "Popular anime · new here";
+  const recommendationEmptyMessage = featuredQuery.isPending
+    ? "Loading AniList recommendations…"
+    : featuredQuery.isError
+      ? "AniList recommendations are temporarily unavailable."
+      : hasRecommendationPreferences
+        ? "No trending AniList titles match your activity yet."
+        : "No popular AniList titles are available right now.";
+  const featured: (SpotlightAnime | Anime)[] = featuredQuery.isPending
+    ? []
+    : Array.from(
+        new Map<number, SpotlightAnime | Anime>(
+          [
+            ...orderedLiveFeatured,
+            ...animeCatalog.map((anime) => ({
+              ...anime,
+              score: anime.score,
+              year: anime.year,
+              episodes: anime.episodes,
+              type: anime.type,
+              description: anime.description,
+            })),
+          ].map((anime): [number, SpotlightAnime | Anime] => [anime.id, anime]),
+        ).values(),
+      ).slice(0, SPOTLIGHT_ITEM_COUNT);
+  const spotlightStatus = featuredQuery.isPending
+    ? "Loading featured anime…"
+    : liveFeatured.length === 0
+      ? "Showing AniPulse catalog picks"
+      : "Featured from AniList trending";
+  const { slide, fading, paused, move, togglePaused } = useFeaturedCarousel(
+    featured.map((anime) => anime.id),
+    selected !== null || menuOpen || featuredQuery.isPending,
+  );
+  const activeSlide = featured.length > 0 ? slide % featured.length : 0;
+  const current = featured[activeSlide] ?? null;
   const historyCount = Object.keys(watchedEpisodes).length;
   const normalizedQuery = query.trim().replace(/\s+/g, " ").toLowerCase();
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedQuery(normalizedQuery), 300);
     return () => window.clearTimeout(timeout);
   }, [normalizedQuery]);
-  const liveResultsSuppressed = watchlistOnly || historyOnly;
-  const liveSearchEnabled =
-    normalizedQuery.length >= 2 && normalizedQuery === debouncedQuery && !liveResultsSuppressed;
-  const liveSearch = useQuery({
-    ...animeSearchQuery(debouncedQuery),
-    enabled: liveSearchEnabled,
-  });
-  useEffect(() => {
-    if (!liveSearchEnabled) {
-      void queryClient.cancelQueries({ queryKey: ["anilist", "search"] });
-    }
-  }, [liveSearchEnabled, queryClient]);
-  const localMalIds = useMemo(() => new Set(animeCatalog.map((anime) => anime.id)), []);
-  const liveOnlyResults = (liveSearch.data ?? []).filter(
-    (anime) =>
-      typeof anime.idMal === "number" &&
-      Number.isInteger(anime.idMal) &&
-      anime.idMal > 0 &&
-      !localMalIds.has(anime.idMal) &&
-      (genre === "All genres" || anime.genres.includes(genre)),
-  );
   const hasSearch = normalizedQuery.length > 0;
-  const filtered = useMemo(() => {
-    let list = animeCatalog.filter(
-      (a) =>
-        matchesAnimeSearch(a, query) &&
-        (genre === "All genres" || a.genres.includes(genre)) &&
-        (!watchlistOnly || saved.includes(a.id)) &&
-        (!historyOnly || watchedEpisodes[a.id] !== undefined),
-    );
-    if (tab === "Top rated") list = [...list].sort((a, b) => b.score - a.score);
-    if (tab === "Popular") list = [...list].sort((a, b) => b.popularity - a.popularity);
-    return list;
-  }, [query, genre, tab, watchlistOnly, saved, historyOnly, watchedEpisodes]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / 12));
-  const visible = filtered.slice((page - 1) * 12, page * 12);
+  const sessionCatalogMode = watchlistOnly || historyOnly;
+  const catalogSearchReady = !hasSearch || normalizedQuery === debouncedQuery;
+  const catalogSort: AniListAnimeSort =
+    tab === "Popular" ? "POPULARITY_DESC" : tab === "Top rated" ? "SCORE_DESC" : "START_DATE_DESC";
+  const catalogDiscoveryQuery = useQuery({
+    ...animeDiscoveryQuery({
+      page,
+      sort: catalogSort,
+      ...(hasSearch ? { search: debouncedQuery } : {}),
+      ...(genre !== "All genres" ? { genre } : {}),
+    }),
+    enabled: !sessionCatalogMode && catalogSearchReady,
+  });
+  const popularPicksQuery = useQuery(animeDiscoveryQuery({ sort: "POPULARITY_DESC" }));
+  const justFinishedQuery = useQuery(
+    animeDiscoveryQuery({
+      sort: "END_DATE_DESC",
+      status: "FINISHED",
+      endDateAfter: recentEndDateCutoff(),
+    }),
+  );
+  const topMoviesQuery = useQuery(
+    animeDiscoveryQuery({ sort: "SCORE_DESC", format: "MOVIE", scoredOnly: true }),
+  );
+  const filtered = useMemo<(Anime | SpotlightAnime)[]>(() => {
+    if (sessionCatalogMode) {
+      const source: (Anime | SpotlightAnime)[] = [...animeCatalog, ...savedSpotlight];
+      let list = source.filter(
+        (anime) =>
+          matchesHomeSearch(anime, query) &&
+          (genre === "All genres" || anime.genres.includes(genre)) &&
+          (!watchlistOnly || saved.includes(anime.id)) &&
+          (!historyOnly || watchedEpisodes[anime.id] !== undefined),
+      );
+      if (tab === "Top rated") {
+        list = [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      }
+      if (tab === "Popular") {
+        list = [...list].sort(
+          (a, b) =>
+            ("popularity" in b ? b.popularity : (b.score ?? 0)) -
+            ("popularity" in a ? a.popularity : (a.score ?? 0)),
+        );
+      }
+      return list;
+    }
+    return toHomepageAnime(catalogDiscoveryQuery.data?.media ?? []);
+  }, [
+    sessionCatalogMode,
+    savedSpotlight,
+    query,
+    genre,
+    watchlistOnly,
+    saved,
+    historyOnly,
+    watchedEpisodes,
+    tab,
+    catalogDiscoveryQuery.data,
+  ]);
+  const catalogCount = sessionCatalogMode
+    ? filtered.length
+    : (catalogDiscoveryQuery.data?.pageInfo.total ?? 0);
+  const pageCount = sessionCatalogMode
+    ? Math.max(1, Math.ceil(filtered.length / 12))
+    : Math.max(1, Math.ceil(catalogCount / 12));
+  const visible = sessionCatalogMode ? filtered.slice((page - 1) * 12, page * 12) : filtered;
   function resetFilters() {
     setQuery("");
     setGenre("All genres");
@@ -349,11 +561,22 @@ export function AnimeHome() {
     setHistoryOnly(false);
     setPage(1);
   }
-  function selectAnime(anime: Anime) {
+  function selectAnime(anime: Anime | SpotlightAnime) {
     setSelected(anime);
   }
   function toggleSaved(id: number) {
-    setSaved((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    const removing = saved.includes(id);
+    const liveMedia = featuredQuery.data?.find((media) => media.idMal === id);
+    const selectedLive = selected?.id === id && !("popularity" in selected) ? selected : null;
+    const spotlight = liveMedia ? toSpotlightAnime(liveMedia) : selectedLive;
+    setSaved((prev) => (removing ? prev.filter((x) => x !== id) : [...prev, id]));
+    setSavedSpotlight((prev) =>
+      removing
+        ? prev.filter((anime) => anime.id !== id)
+        : spotlight && !prev.some((anime) => anime.id === id)
+          ? [...prev, spotlight]
+          : prev,
+    );
   }
   function browse() {
     catalogRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -412,11 +635,6 @@ export function AnimeHome() {
     window.addEventListener("resize", measureGenres);
     return () => window.removeEventListener("resize", measureGenres);
   }, []);
-  const scheduleItems = animeCatalog.slice(
-    day === "Thu" ? 0 : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(day),
-    moreSchedule ? 12 : 6,
-  );
-  if (!current) return null;
   return (
     <>
       <header className="site-header">
@@ -482,9 +700,10 @@ export function AnimeHome() {
             className="icon-control shuffle-control"
             title="Random anime"
             aria-label="Random anime"
-            onClick={() =>
-              selectAnime(animeCatalog[Math.floor(Math.random() * animeCatalog.length)] ?? current)
-            }
+            onClick={() => {
+              const randomAnime = animeCatalog[Math.floor(Math.random() * animeCatalog.length)];
+              if (randomAnime) selectAnime(randomAnime);
+            }}
           >
             <Shuffle />
           </Button>
@@ -505,14 +724,14 @@ export function AnimeHome() {
         </div>
       </header>
       <main className="main-wrap">
-        <section className="hero" aria-label="Featured anime">
+        <section className="hero" aria-label="Featured anime" aria-busy={featuredQuery.isPending}>
           {featured.map((anime, index) => (
             <img
               key={anime.id}
-              className={`hero-image ${slide === index ? "is-active" : ""}`}
-              src={featuredImages[index]}
-              alt={index === 0 ? "Frieren in a mountain valley" : anime.title}
-              aria-hidden={slide !== index}
+              className={`hero-image ${activeSlide === index ? "is-active" : ""}`}
+              src={anime.image}
+              alt={anime.title}
+              aria-hidden={activeSlide !== index}
               width={1920}
               height={1024}
             />
@@ -520,6 +739,9 @@ export function AnimeHome() {
           <div className="hero-top">
             <span className="feature-label">
               <Flame size={14} /> IN THE SPOTLIGHT
+            </span>
+            <span className="sr-only" role="status" aria-live="polite">
+              {spotlightStatus}
             </span>
             <div className="hero-controls">
               <Button
@@ -537,52 +759,67 @@ export function AnimeHome() {
                 variant="outline"
                 className="icon-control"
                 aria-label="Previous featured anime"
+                disabled={featured.length < 2}
                 onClick={() => move(-1)}
               >
                 <ChevronLeft />
               </Button>
               <span className="hero-count">
-                0{slide + 1} <span>/ 0{featured.length}</span>
+                {featured.length === 0 ? "00" : `0${activeSlide + 1}`}{" "}
+                <span>/ 0{featured.length}</span>
               </span>
               <Button
                 size="icon"
                 variant="outline"
                 className="icon-control"
                 aria-label="Next featured anime"
+                disabled={featured.length < 2}
                 onClick={() => move(1)}
               >
                 <ChevronRight />
               </Button>
             </div>
           </div>
-          <div key={current.id} className={`hero-content ${fading ? "is-fading" : ""}`}>
-            <div className="eyebrow">
-              <span className="status-dot" />
-              {slide === 0 ? "A JOURNEY BEYOND THE END" : "YOUR NEXT GREAT ADVENTURE"}
+          {current ? (
+            <div key={current.id} className={`hero-content ${fading ? "is-fading" : ""}`}>
+              <div className="eyebrow">
+                <span className="status-dot" />
+                {liveFeatured.length > 0 ? "FEATURED · ANILIST" : "FEATURED · ANIPULSE CATALOG"}
+              </div>
+              <Metadata anime={current} hero />
+              <h1>{current.title}</h1>
+              {current.description && <p className="hero-description">{current.description}</p>}
+              <div className="hero-actions">
+                <Button asChild>
+                  <Link to="/watch/$animeId" params={{ animeId: String(current.id) }}>
+                    <Play fill="currentColor" /> Watch now
+                  </Link>
+                </Button>
+                <Button variant="outline" onClick={() => selectAnime(current)}>
+                  Details
+                </Button>
+                <Button variant="outline" onClick={() => toggleSaved(current.id)}>
+                  {saved.includes(current.id) ? <Check /> : <Bookmark />}
+                  {saved.includes(current.id) ? "In watchlist" : "Add to watchlist"}
+                </Button>
+              </div>
             </div>
-            <Metadata anime={current} hero />
-            <h1>{current.title}</h1>
-            <p className="hero-description">{current.description}</p>
-            <div className="hero-actions">
-              <Button asChild>
-                <Link to="/watch/$animeId" params={{ animeId: String(current.id) }}>
-                  <Play fill="currentColor" /> Watch now
-                </Link>
-              </Button>
-              <Button variant="outline" onClick={() => selectAnime(current)}>
-                Details
-              </Button>
-              <Button variant="outline" onClick={() => toggleSaved(current.id)}>
-                {saved.includes(current.id) ? <Check /> : <Bookmark />}
-                {saved.includes(current.id) ? "In watchlist" : "Add to watchlist"}
-              </Button>
+          ) : (
+            <div className="hero-content">
+              <div className="eyebrow">
+                <span className="status-dot" />
+                LOADING FEATURED ANIME…
+              </div>
+              <h1>Loading featured anime…</h1>
             </div>
-          </div>
-          <div className="hero-dots">
-            {featured.map((a, i) => (
-              <span key={a.id} className={`hero-dot ${i === slide ? "active" : ""}`} />
-            ))}
-          </div>
+          )}
+          {featured.length > 0 && (
+            <div className="hero-dots">
+              {featured.map((a, i) => (
+                <span key={a.id} className={`hero-dot ${i === activeSlide ? "active" : ""}`} />
+              ))}
+            </div>
+          )}
         </section>
         <div className="genre-bar-wrap">
           <span className="genre-bar-label">Explore by genre</span>
@@ -662,7 +899,7 @@ export function AnimeHome() {
                   <p>Search titles, explore genres, or sort the AniPulse collection.</p>
                 </div>
                 <p className="catalog-count" role="status" aria-live="polite">
-                  {filtered.length} of {animeCatalog.length} titles
+                  {filtered.length} of {catalogCount} titles
                 </p>
               </div>
               <div className="catalog-toolbar">
@@ -720,7 +957,7 @@ export function AnimeHome() {
                 </div>
               )}
               {hasSearch && <h3 className="search-group-title">In your catalog</h3>}
-              {visible.length ? (
+              {visible.length > 0 ? (
                 <div className="anime-grid">
                   {visible.map((a) => (
                     <AnimeCard
@@ -731,7 +968,20 @@ export function AnimeHome() {
                     />
                   ))}
                 </div>
-              ) : hasSearch ? null : (
+              ) : !sessionCatalogMode &&
+                (!catalogSearchReady || catalogDiscoveryQuery.isPending) ? (
+                <p className="detail-query-state" role="status">
+                  {hasSearch ? "Searching AniList…" : "Loading AniList catalog…"}
+                </p>
+              ) : !sessionCatalogMode && catalogDiscoveryQuery.isError ? (
+                <div className="empty-state">
+                  <h3>AniList catalog is temporarily unavailable</h3>
+                  <p>Please try again. No local titles are being presented as live results.</p>
+                  <Button variant="link" onClick={() => void catalogDiscoveryQuery.refetch()}>
+                    Try again <ArrowRight />
+                  </Button>
+                </div>
+              ) : (
                 <div className="empty-state">
                   <Search className="mx-auto mb-3" />
                   <h3>
@@ -753,62 +1003,36 @@ export function AnimeHome() {
                   </Button>
                 </div>
               )}
-              {hasSearch && (
-                <div className="search-live-results" aria-live="polite">
-                  <h3 className="search-group-title">More from AniList</h3>
-                  {liveResultsSuppressed ? (
-                    <p className="text-xs text-muted-foreground">
-                      AniList results are not included while your Watchlist or History filter is
-                      active.
-                    </p>
-                  ) : normalizedQuery.length < 2 ? (
-                    <p className="text-xs text-muted-foreground">
-                      Type at least two characters to search AniList.
-                    </p>
-                  ) : liveSearch.isError ? (
-                    <p className="text-xs text-muted-foreground">
-                      {visible.length > 0
-                        ? "AniList search is temporarily unavailable. Your catalog results are still available."
-                        : "AniList search is temporarily unavailable, and there are no matching titles in your catalog."}
-                    </p>
-                  ) : !liveSearchEnabled || liveSearch.isFetching ? (
-                    <p className="text-xs text-muted-foreground">Searching AniList…</p>
-                  ) : liveOnlyResults.length > 0 ? (
-                    <>
-                      {visible.length === 0 && (
-                        <p className="mb-3 text-xs text-muted-foreground">
-                          No matches in your catalog.
-                        </p>
-                      )}
-                      <div className="anime-grid">
-                        {liveOnlyResults.map((anime) => (
-                          <LiveSearchCard key={anime.id} anime={anime} />
-                        ))}
-                      </div>
-                    </>
-                  ) : visible.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      No anime found in your catalog or AniList.
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">No additional AniList results.</p>
-                  )}
-                </div>
+              {!sessionCatalogMode && catalogDiscoveryQuery.isError && visible.length > 0 && (
+                <p className="detail-query-state" role="status">
+                  AniList could not refresh the catalog; showing cached titles.
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => void catalogDiscoveryQuery.refetch()}
+                  >
+                    Retry
+                  </Button>
+                </p>
               )}
             </section>
           </div>
           <aside className="sidebar">
             <AnimeList
-              title="Top airing"
+              title="Popular picks"
               icon="flame"
-              items={animeCatalog.filter((a) => a.type !== "MOVIE").slice(0, 7)}
+              items={toHomepageAnime(popularPicksQuery.data?.media ?? [])}
               onSelect={selectAnime}
+              isPending={popularPicksQuery.isPending}
+              isError={popularPicksQuery.isError}
+              onRetry={() => void popularPicksQuery.refetch()}
+              emptyMessage="No popular anime are available right now."
             />
             <AnimeList
-              title="On the horizon"
-              items={animeCatalog.slice(6, 12)}
+              title={recommendationTitle}
+              items={recommendationItems}
               onSelect={selectAnime}
-              status="upcoming"
+              emptyMessage={recommendationEmptyMessage}
             />
           </aside>
         </div>
@@ -816,87 +1040,36 @@ export function AnimeHome() {
         <div className="bottom-lists">
           <AnimeList
             title="Just finished"
-            items={[...animeCatalog].filter((a) => a.status === "finished")}
+            items={toHomepageAnime(justFinishedQuery.data?.media ?? [])}
             onSelect={selectAnime}
             status="finished"
+            isPending={justFinishedQuery.isPending}
+            isError={justFinishedQuery.isError}
+            onRetry={() => void justFinishedQuery.refetch()}
+            emptyMessage="No anime finished in the last 180 days."
           />
           <AnimeList
             title="Top movies"
-            items={animeCatalog.filter((a) => a.type === "MOVIE")}
+            items={toHomepageAnime(
+              (topMoviesQuery.data?.media ?? []).filter(
+                (anime) => anime.averageScore != null && anime.averageScore > 0,
+              ),
+            )}
             onSelect={selectAnime}
-            status="finished"
+            isPending={topMoviesQuery.isPending}
+            isError={topMoviesQuery.isError}
+            onRetry={() => void topMoviesQuery.refetch()}
+            emptyMessage="No scored anime movies are available right now."
           />
-          <section className="list-section awards-section" aria-label="Anime Award">
-            <h2 className="section-heading">
-              <ChevronRight />
-              Anime Award
-            </h2>
-            <div className="rank-list">
-              {animeAwards.map((award) => {
-                const anime = animeCatalog.find((item) => item.id === award.animeId);
-                if (!anime) return null;
-                return (
-                  <Button
-                    key={anime.id}
-                    variant="ghost"
-                    className="rank-item award-item"
-                    aria-label={`Details for ${anime.title}, ${award.recognition}`}
-                    onClick={() => selectAnime(anime)}
-                  >
-                    <img src={anime.image} alt="" loading="lazy" width={63} height={90} />
-                    <div className="rank-body">
-                      <div className="rank-title">
-                        <span className="status-dot upcoming" />
-                        <span className="name">{anime.title}</span>
-                      </div>
-                      <p className="award-recognition">{award.recognition}</p>
-                      <span className="award-year">{award.year}</span>
-                    </div>
-                  </Button>
-                );
-              })}
-            </div>
-          </section>
+          <AnimeAwards
+            onSelect={(media, image) => {
+              const anime = toSpotlightAnime(media);
+              if (anime) selectAnime({ ...anime, image, poster: image });
+            }}
+          />
         </div>
         <div className="bottom-lists community-lists">
-          <section className="schedule">
-            <div className="schedule-head">
-              <h2>Airing schedule</h2>
-              <p className="schedule-label">THIS WEEK</p>
-            </div>
-            <div className="schedule-days">
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  key={d}
-                  className={d === day ? "selected" : ""}
-                  onClick={() => setDay(d)}
-                >
-                  {d}
-                </Button>
-              ))}
-            </div>
-            <p className="schedule-date">
-              {day}, October {5 + ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(day)} ·
-              Times in UTC
-            </p>
-            {scheduleItems.map((a, i) => (
-              <div className="schedule-row" key={a.id}>
-                <time>{String(14 + i).padStart(2, "0")}:30</time>
-                <span>{a.title}</span>
-                <em>EP {i + 1}</em>
-              </div>
-            ))}
-            <Button
-              variant="ghost"
-              className="list-more"
-              onClick={() => setMoreSchedule(!moreSchedule)}
-            >
-              {moreSchedule ? "Show less" : "Full schedule"}
-              <ArrowRight />
-            </Button>
-          </section>
+          <AiringSchedule />
 
           <VoiceActors />
           <AnimeVote />
@@ -1010,11 +1183,9 @@ export function AnimeHome() {
                       <Link
                         to="/watch/$animeId"
                         params={{ animeId: String(selected.id) }}
-                        search={
-                          watchedEpisodes[selected.id] !== undefined
-                            ? { ep: watchedEpisodes[selected.id] }
-                            : undefined
-                        }
+                        {...(watchedEpisodes[selected.id] !== undefined && {
+                          search: { ep: watchedEpisodes[selected.id] },
+                        })}
                       >
                         <Play fill="currentColor" /> Watch now
                       </Link>
@@ -1040,6 +1211,10 @@ export function AnimeHome() {
         onNavigate={(view) => {
           resetFilters();
           setMenuOpen(false);
+          if (view === "Manga") {
+            void navigate({ to: "/manga" });
+            return;
+          }
           if (view === "Home") {
             setTab("Newest");
             window.scrollTo({ top: 0, behavior: "smooth" });

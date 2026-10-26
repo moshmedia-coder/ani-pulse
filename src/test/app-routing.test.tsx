@@ -14,4 +14,22 @@ describe("App routing", () => {
 
     expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
   });
+
+  it("matches the registered /manga discovery route", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+
+    const matches = router.matchRoutes("/manga");
+
+    expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
+    expect(matches.at(-1)?.routeId).toBe("/manga/");
+  });
+
+  it("matches manga detail routes with an AniList ID", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+
+    const matches = router.matchRoutes("/manga/701");
+
+    expect(matches.at(-1)?.routeId).toBe("/manga/$mangaId");
+    expect(matches.at(-1)?.pathname).toBe("/manga/701");
+  });
 });

@@ -6,7 +6,7 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LiveTrending } from "@/components/live-trending";
 import { trendingQuery } from "@/lib/anilist";
@@ -24,7 +24,7 @@ const media = {
   seasonYear: 2023,
   format: "TV",
   status: "FINISHED",
-  genres: [],
+  genres: ["Fantasy", "Adventure"],
   trailer: null,
 };
 
@@ -58,6 +58,63 @@ async function renderTrending(client: QueryClient) {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+describe("LiveTrending grid", () => {
+  it("renders wrapped cards with metadata and navigable anime links", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { gcTime: Infinity } },
+    });
+    client.setQueryData(trendingQuery().queryKey, [
+      media,
+      {
+        ...media,
+        id: 2,
+        idMal: 888888,
+        title: {
+          english: "A Recommendation With An Exceptionally Long Title",
+          romaji: "Long Title",
+        },
+        coverImage: { extraLarge: null, color: null },
+        episodes: null,
+        averageScore: null,
+        seasonYear: null,
+        format: null,
+        status: null,
+        genres: [],
+      },
+      ...Array.from({ length: 3 }, (_, index) => ({
+        ...media,
+        id: index + 3,
+        idMal: 777001 + index,
+        title: { english: `Additional title ${index + 1}`, romaji: `Additional ${index + 1}` },
+      })),
+    ]);
+
+    await renderTrending(client);
+
+    const trendingRegion = screen.getByRole("region", { name: "Trending anime" });
+    expect(trendingRegion).toHaveClass("live-grid");
+    expect(trendingRegion).not.toHaveAttribute("aria-roledescription", "carousel");
+    expect(
+      screen.queryByRole("button", { name: /Scroll trending anime (left|right)/ }),
+    ).not.toBeInTheDocument();
+    expect(within(trendingRegion).getAllByRole("link")).toHaveLength(5);
+    expect(within(trendingRegion).getByRole("link", { name: "Watch Frieren" })).toHaveAttribute(
+      "href",
+      "/watch/52991",
+    );
+    const longTitleCard = within(trendingRegion).getByRole("link", {
+      name: "Watch A Recommendation With An Exceptionally Long Title",
+    });
+    expect(longTitleCard).toHaveAttribute("href", "/watch/888888");
+    const frierenCard = within(trendingRegion).getByRole("link", { name: "Watch Frieren" });
+    expect(within(frierenCard).getByText("Fantasy")).toBeVisible();
+    expect(within(frierenCard).getByText("Adventure")).toBeVisible();
+    expect(within(frierenCard).getByText("9.3")).toBeVisible();
+    expect(within(longTitleCard).getByText("—")).toBeVisible();
+    client.clear();
+  });
 });
 
 describe("LiveTrending AniList failure states", () => {

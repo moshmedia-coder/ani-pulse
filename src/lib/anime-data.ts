@@ -33,30 +33,13 @@ export function matchesAnimeSearch(anime: Anime, query: string) {
 
 export const animeAwards = [
   {
-    animeId: 199,
-    recognition: "Academy Awards · Best Animated Feature",
-    year: 2003,
-    source: "https://www.oscars.org/oscars/ceremonies/2003",
-  },
-  {
-    animeId: 40748,
-    recognition: "Crunchyroll Anime Awards · Anime of the Year",
-    year: 2021,
-    source: "https://www.ign.com/articles/crunchyrolls-anime-awards-winners-announced",
-  },
-  {
-    animeId: 32281,
-    recognition: "Sitges · Anima’t Best Feature Film",
-    year: 2016,
-    source: "https://sitgesfilmfestival.com/en/festival/historia/2016/awards",
-  },
-  {
     animeId: 37510,
-    recognition: "Japan Academy Film Prize · Animation of the Year",
+    malId: 38826,
+    recognition: "Japan Academy Film Prize · Best Animation Work",
     year: 2020,
     source: "https://www.japan-academy-prize.jp/news/index_news2020.php",
   },
-];
+] as const;
 
 export const animeCatalog: Anime[] = [
   {
@@ -88,9 +71,9 @@ export const animeCatalog: Anime[] = [
       "In a world of hunters and monsters, the weakest hunter receives a mysterious power that lets him level up without limits.",
   },
   {
-    id: 51009,
+    id: 51019,
     title: "Demon Slayer: Swordsmith Village Arc",
-    image: "/images/anime/51009.jpg",
+    image: "/images/anime/51019.png",
     score: 8.2,
     year: 2023,
     episodes: 11,

@@ -7,18 +7,19 @@ import {
   Bookmark,
   ChevronLeft,
   ChevronRight,
-  Clock3,
   LayoutGrid,
   List,
   Maximize2,
   Minimize2,
   Play,
-  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Brand } from "@/components/anipulse-brand";
+import { WatchComments } from "@/components/watch-comments";
+import { WatchDiscovery } from "@/components/watch-discovery";
 import { animeCatalog } from "@/lib/anime-data";
-import { animeTitle, cleanDescription, mediaByMalQuery } from "@/lib/anilist";
+import { animeTitle, mediaByMalQuery } from "@/lib/anilist";
+import { resolveYouTubeTrailerId } from "@/lib/watch-preview";
 import {
   notifyWatchHistoryChanged,
   readWatchedEpisodes,
@@ -64,6 +65,7 @@ function WatchPage() {
     (media ? animeTitle(media).trim() : "") ||
     local?.title ||
     (isPending ? "Loading…" : "Unknown anime");
+  const banner = media?.bannerImage ?? media?.coverImage.extraLarge ?? local?.image;
   const mediaEpisodeCount =
     media?.episodes != null && Number.isSafeInteger(media.episodes) && media.episodes > 0
       ? media.episodes
@@ -79,9 +81,6 @@ function WatchPage() {
   const total = mediaEpisodeCount ?? localEpisodeCount;
   const released = nextAiringEpisode !== null ? Math.max(0, nextAiringEpisode - 1) : total;
   const episode = released !== null ? Math.min(ep, Math.max(1, released)) : ep;
-  const banner = media?.bannerImage ?? media?.coverImage.extraLarge ?? local?.image;
-  const description = cleanDescription(media?.description ?? null) || local?.description || "";
-
   const [playing, setPlaying] = useState(false);
   const [audio, setAudio] = useState<"SUB" | "DUB">("SUB");
   const [theater, setTheater] = useState(false);
@@ -108,7 +107,7 @@ function WatchPage() {
     () => Array.from({ length: released ?? 0 }, (_, i) => i + 1),
     [released],
   );
-  const trailer = media?.trailer?.site === "youtube" ? media.trailer.id : null;
+  const trailer = resolveYouTubeTrailerId(media?.trailer);
   const canPlayEpisode =
     trailer !== null && (released === null || episode <= released) && validMalId;
   const episodeBoundaryMessage =
@@ -119,20 +118,6 @@ function WatchPage() {
         : episode >= released
           ? "You're at the latest available episode."
           : "";
-  const rating =
-    media?.averageScore != null && Number.isFinite(media.averageScore)
-      ? (media.averageScore / 10).toFixed(1)
-      : local?.score != null && Number.isFinite(local.score)
-        ? local.score.toFixed(1)
-        : null;
-  const year =
-    media?.seasonYear != null && Number.isSafeInteger(media.seasonYear) && media.seasonYear > 0
-      ? media.seasonYear
-      : local?.year;
-  const format = media?.format?.trim() || local?.type.trim() || "";
-  const mediaGenres = media?.genres.map((item) => item.trim()).filter(Boolean) ?? [];
-  const genres = mediaGenres.length > 0 ? mediaGenres : (local?.genres ?? []);
-
   return (
     <div className="watch-page">
       <header className="site-header">
@@ -237,49 +222,6 @@ function WatchPage() {
           <p className="audio-note">
             SUB/DUB is a display preference here; trailer audio is provided by YouTube.
           </p>
-
-          <div className="watch-info">
-            {media?.coverImage.extraLarge || local?.image ? (
-              <img
-                src={media?.coverImage.extraLarge ?? local?.image}
-                alt={title}
-                width={130}
-                height={188}
-              />
-            ) : null}
-            <div>
-              <h1>{title}</h1>
-              <p className="watch-current-episode">
-                {released === null
-                  ? `Episode ${episode} · Episode count unavailable`
-                  : `Episode ${episode} of ${released} available${nextAiringEpisode !== null ? ` (${total ?? released} total planned)` : ""}`}
-              </p>
-              <div className="metadata">
-                {format && <span>{format.replaceAll("_", " ")}</span>}
-                {year != null && <span>{year}</span>}
-                {rating && (
-                  <span>
-                    <Star /> {rating}
-                  </span>
-                )}
-                {media?.duration && (
-                  <span>
-                    <Clock3 /> {media.duration} min
-                  </span>
-                )}
-                {media?.studios?.nodes[0] && <span>{media.studios.nodes[0].name}</span>}
-              </div>
-              {description && <p>{description}</p>}
-              {genres.length > 0 && (
-                <div className="text-xs text-primary">{genres.join(" · ")}</div>
-              )}
-              {isError && (
-                <p className="watch-fallback-note" role="status">
-                  AniList details are unavailable; showing catalog information where possible.
-                </p>
-              )}
-            </div>
-          </div>
         </section>
 
         <aside className="episode-panel">
@@ -344,29 +286,17 @@ function WatchPage() {
         </aside>
       </main>
 
-      {!!media?.recommendations?.nodes.length && (
-        <section className="watch-recs">
-          <h2>You may also like</h2>
-          <div className="live-track">
-            {media.recommendations.nodes
-              .map((n) => n.mediaRecommendation)
-              .filter((r): r is NonNullable<typeof r> => !!r?.idMal)
-              .map((r) => (
-                <Link
-                  key={r.id}
-                  to="/watch/$animeId"
-                  params={{ animeId: String(r.idMal) }}
-                  className="live-card"
-                >
-                  <div className="poster-frame">
-                    <img src={r.coverImage.extraLarge ?? ""} alt={animeTitle(r)} loading="lazy" />
-                  </div>
-                  <span className="live-title">{animeTitle(r)}</span>
-                </Link>
-              ))}
-          </div>
-        </section>
-      )}
+      <WatchDiscovery
+        media={media}
+        local={local}
+        title={title}
+        episode={episode}
+        episodeCount={total}
+        releasedCount={released}
+        isPending={isPending}
+        isError={isError}
+      />
+      {validMalId && <WatchComments animeId={malId} />}
     </div>
   );
 }

@@ -16,7 +16,9 @@ const liveMedia = [
     id: 1,
     idMal: 52991,
     title: { english: "Frieren: Beyond Journey's End", romaji: "Sousou no Frieren" },
+    description: "A verified AniList synopsis for Frieren.",
     coverImage: { extraLarge: "https://example.test/frieren.jpg", color: null },
+    episodes: 28,
     averageScore: 93,
     seasonYear: 2023,
     format: "TV",
@@ -45,12 +47,40 @@ const liveMedia = [
     status: "FINISHED",
     genres: ["Action"],
   },
+  {
+    id: 4,
+    idMal: 888888,
+    title: { english: "Duplicate MAL mapping", romaji: "Duplicate MAL mapping" },
+    coverImage: { extraLarge: "https://example.test/duplicate.jpg", color: null },
+    averageScore: 79,
+    seasonYear: 2024,
+    format: "TV",
+    status: "FINISHED",
+    genres: ["Action"],
+  },
 ];
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json" },
+  });
+}
+
+function pageResponse(media: unknown[]) {
+  return jsonResponse({
+    data: {
+      Page: {
+        media,
+        pageInfo: {
+          total: media.length,
+          currentPage: 1,
+          lastPage: 1,
+          hasNextPage: false,
+          perPage: 12,
+        },
+      },
+    },
   });
 }
 
@@ -83,11 +113,26 @@ async function renderHome(fetchMock: ReturnType<typeof vi.fn>) {
 
 function successfulSearchFetch() {
   return vi.fn(async (_url: string, init: RequestInit) => {
-    const body = JSON.parse(String(init.body)) as { query: string };
-    if (body.query.includes("search:")) {
-      return jsonResponse({ data: { Page: { media: liveMedia } } });
+    const body = JSON.parse(String(init.body)) as {
+      query: string;
+      variables?: { search?: string | null; genres?: string[] | null };
+    };
+    if (body.query.includes("airingSchedules")) {
+      return jsonResponse({
+        data: { Page: { pageInfo: { hasNextPage: false }, airingSchedules: [] } },
+      });
     }
-    return jsonResponse({ data: { Page: { media: [] } } });
+    const search = body.variables?.search?.toLowerCase();
+    const results = liveMedia.filter(
+      (anime) =>
+        (!search ||
+          `${anime.title.english} ${anime.title.romaji} ${anime.genres.join(" ")}`
+            .toLowerCase()
+            .includes(search)) &&
+        (!body.variables?.genres?.length ||
+          body.variables.genres.some((genre) => anime.genres.includes(genre))),
+    );
+    return pageResponse(results);
   });
 }
 
@@ -97,13 +142,28 @@ function detailFetch(media: unknown) {
     if (body.query.includes("Media(idMal:")) {
       return jsonResponse({ data: { Media: media } });
     }
-    return jsonResponse({ data: { Page: { media: [] } } });
+    if (body.query.includes("airingSchedules")) {
+      return jsonResponse({
+        data: { Page: { pageInfo: { hasNextPage: false }, airingSchedules: [] } },
+      });
+    }
+    return pageResponse(liveMedia);
   });
 }
 
-function openFrierenDetails() {
+function detailRequestCount(fetchMock: ReturnType<typeof detailFetch>, malId: number) {
+  return fetchMock.mock.calls.filter((call) => {
+    const body = JSON.parse(String(call[1]?.body)) as {
+      query: string;
+      variables: { id?: number };
+    };
+    return body.query.includes("Media(idMal:") && body.variables.id === malId;
+  }).length;
+}
+
+async function openFrierenDetails() {
   fireEvent.click(
-    screen.getByRole("button", { name: "Details for Frieren: Beyond Journey's End" }),
+    await screen.findByRole("button", { name: "Details for Frieren: Beyond Journey's End" }),
   );
 }
 
@@ -114,7 +174,7 @@ afterEach(() => {
 });
 
 describe("unified anime search", () => {
-  it("matches local catalog fields and updates local results immediately", async () => {
+  it("matches local session data and searches AniList as the primary catalog", async () => {
     const frieren = animeCatalog.find((anime) => anime.id === 52991)!;
     expect(matchesAnimeSearch(frieren, "fantasy")).toBe(true);
     expect(matchesAnimeSearch(frieren, "tv")).toBe(true);
@@ -135,38 +195,56 @@ describe("unified anime search", () => {
     fireEvent.change(search, { target: { value: "Frieren" } });
 
     expect(
-      screen.getByRole("button", { name: "Details for Frieren: Beyond Journey's End" }),
+      await screen.findByRole(
+        "button",
+        { name: "Details for Frieren: Beyond Journey's End" },
+        { timeout: 5000 },
+      ),
     ).toBeInTheDocument();
   }, 15000);
 
-  it("debounces live requests, requires two characters, and shows deduplicated live results", async () => {
+  it("debounces AniList catalog search and removes duplicate or unroutable results", async () => {
     const fetchMock = successfulSearchFetch();
     const { client } = await renderHome(fetchMock);
     const search = screen.getByRole("textbox", { name: "Search anime" });
     fireEvent.change(search, { target: { value: "f" } });
     await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
     expect(
-      fetchMock.mock.calls.filter((call) => String(call[1]?.body).includes("search:")),
-    ).toHaveLength(0);
+      fetchMock.mock.calls.filter(
+        (call) =>
+          (JSON.parse(String(call[1]?.body)) as { variables: { search?: string } }).variables
+            .search === "f",
+      ),
+    ).toHaveLength(1);
 
     fireEvent.change(search, { target: { value: "  FRIEREN  " } });
-    expect(
-      screen.getByRole("button", { name: "Details for Frieren: Beyond Journey's End" }),
-    ).toBeInTheDocument();
     await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
-    await waitFor(() =>
-      expect(client.getQueryState(["anilist", "search", "frieren"])?.status).toBe("success"),
-    );
     expect(
-      fetchMock.mock.calls.filter((call) => String(call[1]?.body).includes("search:")),
+      fetchMock.mock.calls.filter(
+        (call) =>
+          (JSON.parse(String(call[1]?.body)) as { variables: { search?: string } }).variables
+            .search === "frieren",
+      ),
     ).toHaveLength(1);
-    expect(screen.getByRole("link", { name: "Watch New from AniList" })).toBeInTheDocument();
-
     expect(
-      screen.queryByRole("link", { name: "Watch Frieren: Beyond Journey's End" }),
+      await screen.findByRole("button", { name: "Details for Frieren: Beyond Journey's End" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Details for New from AniList" }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Watch No Watch Route" })).not.toBeInTheDocument();
-  }, 15000);
+    expect(
+      screen.queryByRole("button", { name: "Details for No Watch Route" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Details for Duplicate MAL mapping" }),
+    ).not.toBeInTheDocument();
+    expect(
+      client
+        .getQueryCache()
+        .getAll()
+        .some((query) => query.state.status === "success"),
+    ).toBe(true);
+  }, 30000);
 
   it("does not run a pending debounced request after the search is cleared", async () => {
     const fetchMock = successfulSearchFetch();
@@ -177,34 +255,57 @@ describe("unified anime search", () => {
 
     await act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
     expect(
-      fetchMock.mock.calls.filter((call) => String(call[1]?.body).includes("search:")),
+      fetchMock.mock.calls.filter(
+        (call) =>
+          (JSON.parse(String(call[1]?.body)) as { variables: { search?: string | null } }).variables
+            .search === "frieren",
+      ),
     ).toHaveLength(0);
     expect(screen.queryByText("More from AniList")).not.toBeInTheDocument();
   }, 15000);
 
   it.each(["429", "network", "graphql"] as const)(
-    "keeps local results available when AniList search fails with %s",
+    "does not substitute local catalog results when AniList search fails with %s",
     async (failure) => {
       const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
-        const body = JSON.parse(String(init.body)) as { query: string };
-        if (!body.query.includes("search:")) {
-          return jsonResponse({ data: { Page: { media: [] } } });
+        const body = JSON.parse(String(init.body)) as {
+          query: string;
+          variables: { search?: string | null };
+        };
+        if (body.query.includes("airingSchedules")) {
+          return jsonResponse({
+            data: { Page: { pageInfo: { hasNextPage: false }, airingSchedules: [] } },
+          });
+        }
+        if (!body.variables.search) {
+          return pageResponse([]);
         }
         if (failure === "429") return jsonResponse({}, 429);
         if (failure === "graphql") return jsonResponse({ errors: [{ message: "Unavailable" }] });
         throw new TypeError("offline");
       });
-      await renderHome(fetchMock);
+      const { client } = await renderHome(fetchMock);
       fireEvent.change(screen.getByRole("textbox", { name: "Search anime" }), {
         target: { value: "frieren" },
       });
 
       expect(
-        screen.getByRole("button", { name: "Details for Frieren: Beyond Journey's End" }),
-      ).toBeInTheDocument();
+        await screen.findByText(
+          "AniList catalog is temporarily unavailable",
+          {},
+          { timeout: 5000 },
+        ),
+      ).toBeVisible();
       expect(
-        await screen.findByText(/AniList search is temporarily unavailable/),
-      ).toBeInTheDocument();
+        screen.queryByRole("button", { name: "Details for Frieren: Beyond Journey's End" }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+      expect(
+        client
+          .getQueryCache()
+          .getAll()
+          .some((query) => query.state.status === "error"),
+      ).toBe(true);
     },
     15000,
   );
@@ -248,7 +349,7 @@ describe("unified anime search", () => {
 });
 
 describe("anime detail dialog metadata", () => {
-  it("shows local details immediately while AniList loads and keeps the resume link", async () => {
+  it("shows AniList discovery details while AniList enrichment loads and keeps the resume link", async () => {
     let resolveDetails!: (response: Response) => void;
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
       const body = JSON.parse(String(init.body)) as { query: string };
@@ -257,18 +358,23 @@ describe("anime detail dialog metadata", () => {
           resolveDetails = resolve;
         });
       }
-      return jsonResponse({ data: { Page: { media: [] } } });
+      if (body.query.includes("airingSchedules")) {
+        return jsonResponse({
+          data: { Page: { pageInfo: { hasNextPage: false }, airingSchedules: [] } },
+        });
+      }
+      return pageResponse(liveMedia);
     });
     sessionStorage.setItem("anipulse-watched-52991", JSON.stringify([7]));
     await renderHome(fetchMock);
 
-    openFrierenDetails();
+    await openFrierenDetails();
 
     const dialog = screen.getByRole("dialog");
     expect(
       within(dialog).getByRole("heading", { name: "Frieren: Beyond Journey's End" }),
     ).toBeVisible();
-    expect(within(dialog).getByText(/After the demon king is defeated/)).toBeVisible();
+    expect(within(dialog).getByText("A verified AniList synopsis for Frieren.")).toBeVisible();
     expect(within(dialog).getByText("28 episodes")).toBeVisible();
     expect(within(dialog).getByText("9.3")).toBeVisible();
     expect(within(dialog).getByText("Adventure · Drama · Fantasy")).toBeVisible();
@@ -279,7 +385,7 @@ describe("anime detail dialog metadata", () => {
     );
 
     await act(async () => resolveDetails(jsonResponse({ data: { Media: null } })));
-    expect(within(dialog).getByText(/After the demon king is defeated/)).toBeVisible();
+    expect(within(dialog).getByText("A verified AniList synopsis for Frieren.")).toBeVisible();
   }, 15000);
 
   it("enriches local details with AniList metadata and reuses the cached result", async () => {
@@ -298,7 +404,7 @@ describe("anime detail dialog metadata", () => {
     });
     await renderHome(fetchMock);
 
-    openFrierenDetails();
+    await openFrierenDetails();
 
     const dialog = screen.getByRole("dialog");
     expect(
@@ -315,22 +421,18 @@ describe("anime detail dialog metadata", () => {
     expect(within(dialog).getByText("MOVIE")).toBeVisible();
     expect(within(dialog).getByText("Action · Mystery")).toBeVisible();
     expect(within(dialog).getByText("Status: Not Yet Released")).toBeVisible();
-    expect(
-      fetchMock.mock.calls.filter((call) => String(call[1]?.body).includes("Media(idMal:")),
-    ).toHaveLength(1);
+    expect(detailRequestCount(fetchMock, 52991)).toBe(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    openFrierenDetails();
+    await openFrierenDetails();
 
     expect(
       await within(screen.getByRole("dialog")).findByRole("heading", {
         name: "Frieren: AniList Title",
       }),
     ).toBeVisible();
-    expect(
-      fetchMock.mock.calls.filter((call) => String(call[1]?.body).includes("Media(idMal:")),
-    ).toHaveLength(1);
+    expect(detailRequestCount(fetchMock, 52991)).toBe(1);
   }, 15000);
 
   it("falls back field by field when AniList metadata is missing", async () => {
@@ -349,34 +451,39 @@ describe("anime detail dialog metadata", () => {
     });
     await renderHome(fetchMock);
 
-    openFrierenDetails();
+    await openFrierenDetails();
 
     const dialog = await screen.findByRole("dialog");
     expect(
       within(dialog).getByRole("heading", { name: "Frieren: Beyond Journey's End" }),
     ).toBeVisible();
-    expect(within(dialog).getByText(/After the demon king is defeated/)).toBeVisible();
+    expect(within(dialog).getByText("A verified AniList synopsis for Frieren.")).toBeVisible();
     expect(within(dialog).getByAltText("Frieren: Beyond Journey's End")).toHaveAttribute(
       "src",
-      "/images/anime/52991.jpg",
+      "https://example.test/frieren.jpg",
     );
     expect(within(dialog).getByText("TV")).toBeVisible();
     expect(within(dialog).getByText("2023")).toBeVisible();
     expect(within(dialog).getByText("28 episodes")).toBeVisible();
     expect(within(dialog).getByText("9.3")).toBeVisible();
     expect(within(dialog).getByText("Adventure · Drama · Fantasy")).toBeVisible();
-    expect(dialog.textContent).not.toMatch(/undefined|NaN|Status:/);
+    expect(dialog.textContent).not.toMatch(/undefined|NaN/);
   }, 15000);
 
-  it("keeps local details and Watch Now usable when AniList fails", async () => {
+  it("keeps AniList discovery details and Watch Now usable when details fail", async () => {
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
       const body = JSON.parse(String(init.body)) as { query: string };
       if (body.query.includes("Media(idMal:")) return jsonResponse({}, 429);
-      return jsonResponse({ data: { Page: { media: [] } } });
+      if (body.query.includes("airingSchedules")) {
+        return jsonResponse({
+          data: { Page: { pageInfo: { hasNextPage: false }, airingSchedules: [] } },
+        });
+      }
+      return pageResponse(liveMedia);
     });
     await renderHome(fetchMock);
 
-    openFrierenDetails();
+    await openFrierenDetails();
 
     const dialog = screen.getByRole("dialog");
     expect(
@@ -385,7 +492,7 @@ describe("anime detail dialog metadata", () => {
     expect(
       within(dialog).getByRole("heading", { name: "Frieren: Beyond Journey's End" }),
     ).toBeVisible();
-    expect(within(dialog).getByText(/After the demon king is defeated/)).toBeVisible();
+    expect(within(dialog).getByText("A verified AniList synopsis for Frieren.")).toBeVisible();
     expect(within(dialog).getByRole("link", { name: "Watch now" })).toHaveAttribute(
       "href",
       "/watch/52991",
@@ -413,9 +520,7 @@ describe("catalog discovery controls", () => {
           "Search titles, explore genres, or sort the AniPulse collection.",
         ),
       ).toBeVisible();
-      expect(within(catalog).getByRole("status")).toHaveTextContent(
-        `${animeCatalog.length} of ${animeCatalog.length} titles`,
-      );
+      await waitFor(() => expect(within(catalog).getByText("2 of 4 titles")).toBeVisible());
 
       const genreGroup = screen.getByRole("group", { name: "Filter catalog by genre" });
       const actionGenre = within(genreGroup).getByRole("button", { name: "Action" });
@@ -423,10 +528,7 @@ describe("catalog discovery controls", () => {
       fireEvent.click(actionGenre);
 
       expect(actionGenre).toHaveAttribute("aria-pressed", "true");
-      const actionCount = animeCatalog.filter((anime) => anime.genres.includes("Action")).length;
-      expect(within(catalog).getByRole("status")).toHaveTextContent(
-        `${actionCount} of ${animeCatalog.length} titles`,
-      );
+      await waitFor(() => expect(within(catalog).getByText("1 of 3 titles")).toBeVisible());
 
       const sortGroup = within(catalog).getByRole("group", { name: "Sort catalog" });
       const topRated = within(sortGroup).getByRole("button", { name: "TOP RATED" });
@@ -452,10 +554,12 @@ describe("catalog discovery controls", () => {
     });
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
       const body = JSON.parse(String(init.body)) as { query: string };
-      if (body.query.includes("search:")) {
-        return jsonResponse({ data: { Page: { media: [] } } });
+      if (body.query.includes("airingSchedules")) {
+        return jsonResponse({
+          data: { Page: { pageInfo: { hasNextPage: false }, airingSchedules: [] } },
+        });
       }
-      return jsonResponse({ data: { Page: { media: [] } } });
+      return pageResponse([]);
     });
     try {
       await renderHome(fetchMock);

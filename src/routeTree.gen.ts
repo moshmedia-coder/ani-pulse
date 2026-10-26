@@ -10,12 +10,30 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as MangaRouteRouteImport } from './routes/manga.route'
+import { Route as MangaIndexRouteImport } from './routes/manga.index'
+import { Route as MangaMangaIdRouteImport } from './routes/manga.$mangaId'
 import { Route as WatchAnimeIdRouteImport } from './routes/watch.$animeId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const MangaRouteRoute = MangaRouteRouteImport.update({
+  id: '/manga',
+  path: '/manga',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MangaIndexRoute = MangaIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => MangaRouteRoute,
+} as any)
+const MangaMangaIdRoute = MangaMangaIdRouteImport.update({
+  id: '/$mangaId',
+  path: '/$mangaId',
+  getParentRoute: () => MangaRouteRoute,
 } as any)
 const WatchAnimeIdRoute = WatchAnimeIdRouteImport.update({
   id: '/watch/$animeId',
@@ -25,27 +43,42 @@ const WatchAnimeIdRoute = WatchAnimeIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/manga': typeof MangaRouteRouteWithChildren
+  '/manga/$mangaId': typeof MangaMangaIdRoute
   '/watch/$animeId': typeof WatchAnimeIdRoute
+  '/manga/': typeof MangaIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/manga/$mangaId': typeof MangaMangaIdRoute
   '/watch/$animeId': typeof WatchAnimeIdRoute
+  '/manga': typeof MangaIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/manga': typeof MangaRouteRouteWithChildren
+  '/manga/$mangaId': typeof MangaMangaIdRoute
   '/watch/$animeId': typeof WatchAnimeIdRoute
+  '/manga/': typeof MangaIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/watch/$animeId'
+  fullPaths: '/' | '/manga' | '/manga/$mangaId' | '/watch/$animeId' | '/manga/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/watch/$animeId'
-  id: '__root__' | '/' | '/watch/$animeId'
+  to: '/' | '/manga/$mangaId' | '/watch/$animeId' | '/manga'
+  id:
+    | '__root__'
+    | '/'
+    | '/manga'
+    | '/manga/$mangaId'
+    | '/watch/$animeId'
+    | '/manga/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MangaRouteRoute: typeof MangaRouteRouteWithChildren
   WatchAnimeIdRoute: typeof WatchAnimeIdRoute
 }
 
@@ -58,6 +91,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/manga': {
+      id: '/manga'
+      path: '/manga'
+      fullPath: '/manga'
+      preLoaderRoute: typeof MangaRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/manga/': {
+      id: '/manga/'
+      path: '/'
+      fullPath: '/manga/'
+      preLoaderRoute: typeof MangaIndexRouteImport
+      parentRoute: typeof MangaRouteRoute
+    }
+    '/manga/$mangaId': {
+      id: '/manga/$mangaId'
+      path: '/$mangaId'
+      fullPath: '/manga/$mangaId'
+      preLoaderRoute: typeof MangaMangaIdRouteImport
+      parentRoute: typeof MangaRouteRoute
+    }
     '/watch/$animeId': {
       id: '/watch/$animeId'
       path: '/watch/$animeId'
@@ -68,8 +122,23 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface MangaRouteRouteChildren {
+  MangaMangaIdRoute: typeof MangaMangaIdRoute
+  MangaIndexRoute: typeof MangaIndexRoute
+}
+
+const MangaRouteRouteChildren: MangaRouteRouteChildren = {
+  MangaMangaIdRoute: MangaMangaIdRoute,
+  MangaIndexRoute: MangaIndexRoute,
+}
+
+const MangaRouteRouteWithChildren = MangaRouteRoute._addFileChildren(
+  MangaRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MangaRouteRoute: MangaRouteRouteWithChildren,
   WatchAnimeIdRoute: WatchAnimeIdRoute,
 }
 export const routeTree = rootRouteImport
