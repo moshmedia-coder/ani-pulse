@@ -1548,13 +1548,29 @@
 }
 @media (max-width: 760px) {
   .live-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
   }
-}
-@media (max-width: 360px) {
-  .live-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .live-card {
+    padding: 6px;
+  }
+  .live-anime-title {
+    gap: 4px;
+    margin: 7px 0 5px;
+    font-size: 10px;
+    line-height: 1.3;
+  }
+  .live-meta {
+    gap: 3px;
+    font-size: 9px;
+  }
+  .live-meta span {
+    gap: 3px;
+    padding: 2px 3px;
+  }
+  .live-meta svg {
+    width: 9px;
+    height: 9px;
   }
 }
 @keyframes pulse {
@@ -2100,17 +2116,56 @@
 @media (max-width: 760px) {
   .watch-character-grid,
   .watch-anime-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
   }
   .watch-character-card dl {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 360px) {
-  .watch-character-grid,
-  .watch-anime-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .watch-character-card {
+    gap: 6px;
+    padding: 8px;
+  }
+  .watch-character-card h3 {
+    font-size: 11px;
+  }
+  .watch-character-role {
+    margin: 2px 0 6px;
+    font-size: 10px;
+  }
+  .watch-character-card dl {
+    gap: 6px;
+    min-height: 0;
+  }
+  .watch-character-card dt {
+    font-size: 9px;
+  }
+  .watch-character-card dd {
+    font-size: 10px;
+  }
+  .watch-anime-grid .watch-anime-card {
+    padding: 6px;
+  }
+  .watch-anime-grid .watch-card-title {
+    margin-top: 6px;
+    font-size: 10px;
+    line-height: 1.3;
+  }
+  .watch-anime-grid .watch-card-meta {
+    font-size: 9px;
+  }
+  .watch-anime-grid .watch-card-score {
+    right: 5px;
+    bottom: 5px;
+    gap: 3px;
+    padding: 3px 4px;
+    font-size: 9px;
+  }
+  .watch-anime-grid .watch-card-score svg {
+    width: 10px;
+    height: 10px;
   }
 }
 .watch-card-title {
