@@ -117,19 +117,16 @@ function toHomepageAnime(media: AniListMedia[]) {
 function Metadata({
   anime,
   hero = false,
-  showGenres = false,
   showEpisodes = true,
 }: {
   anime: SpotlightAnime | Anime;
   hero?: boolean;
-  showGenres?: boolean;
   showEpisodes?: boolean;
 }) {
   return (
     <div className="metadata">
       {anime.type && <span>{anime.type}</span>}
       {anime.year != null && <span>{anime.year}</span>}
-      {showGenres && anime.genres.length > 0 && <span>{anime.genres.join(" · ")}</span>}
       {showEpisodes && anime.episodes != null && (
         <span>
           <Subtitles />
@@ -141,6 +138,36 @@ function Metadata({
         <span>
           <Star />
           {anime.score}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CatalogCardMetadata({ anime }: { anime: Anime | SpotlightAnime }) {
+  const year =
+    anime.year != null && Number.isSafeInteger(anime.year) && anime.year > 0 ? anime.year : null;
+  const formatYear = [anime.type?.trim(), year].filter(Boolean).join(" ");
+  const episodes =
+    anime.episodes != null && Number.isSafeInteger(anime.episodes) && anime.episodes > 0
+      ? anime.episodes
+      : null;
+  const score =
+    anime.score != null && Number.isFinite(anime.score) && anime.score > 0 ? anime.score : null;
+
+  return (
+    <div className="metadata anime-card-metadata">
+      {formatYear && <span>{formatYear}</span>}
+      {episodes != null && (
+        <span>
+          <Subtitles />
+          {episodes}
+        </span>
+      )}
+      {score != null && (
+        <span>
+          <Star />
+          {score}
         </span>
       )}
     </div>
@@ -191,19 +218,14 @@ function AnimeCard({
             width={300}
             height={435}
           />
-          <span className="poster-tag">SUB · DUB</span>
           <span className="poster-play">
             <Play />
           </span>
         </div>
       </Button>
       <div className="anime-title">
-        <span className={`status-dot ${anime.status}`} />
         <span title={anime.title}>{anime.title}</span>
       </div>
-      {!("popularity" in anime) && anime.description && (
-        <p className="anime-synopsis">{cleanDescription(anime.description)}</p>
-      )}
       {resumeEpisode !== undefined && (
         <Link
           to="/watch/$animeId"
@@ -216,7 +238,7 @@ function AnimeCard({
           Resume Ep {resumeEpisode}
         </Link>
       )}
-      <Metadata anime={anime} showGenres={!("popularity" in anime)} />
+      <CatalogCardMetadata anime={anime} />
     </article>
   );
 }

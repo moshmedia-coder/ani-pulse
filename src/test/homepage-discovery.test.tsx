@@ -153,6 +153,18 @@ function successfulFetch() {
         title: { english: "Second Catalog Title", romaji: "Second Catalog Title" },
         genres: ["Action"],
       }),
+      media({
+        id: 9,
+        idMal: 909,
+        title: { english: "Unrated Catalog Title", romaji: "Unrated Catalog Title" },
+        description: null,
+        episodes: null,
+        averageScore: null,
+        seasonYear: null,
+        startDate: { year: null, month: null, day: null },
+        format: null,
+        genres: [],
+      }),
     ];
     if (body.variables.search) {
       catalog = catalog.filter((item) =>
@@ -228,15 +240,26 @@ describe("homepage AniList discovery", () => {
     const catalogCard = await within(catalog).findByRole("button", {
       name: "Details for Catalog Real Title",
     });
-    const catalogArticle = within(catalogCard.closest("article")!);
+    const catalogArticleElement = catalogCard.closest("article")!;
+    const catalogArticle = within(catalogArticleElement);
     expect(within(catalog).getByAltText("Catalog Real Title")).toHaveAttribute(
       "src",
       "https://example.test/catalog-cover.jpg",
     );
-    expect(catalogArticle.getByText("A real synopsis from AniList.")).toBeVisible();
-    expect(catalogArticle.getByText("Adventure · Fantasy")).toBeVisible();
-    expect(catalogArticle.getByText("2025")).toBeVisible();
+    expect(catalogArticle.queryByText("A real synopsis from AniList.")).not.toBeInTheDocument();
+    expect(catalogArticle.queryByText("Adventure · Fantasy")).not.toBeInTheDocument();
+    expect(catalogArticle.queryByText("SUB · DUB")).not.toBeInTheDocument();
+    expect(catalogArticleElement.querySelector(".status-dot")).toBeNull();
+    expect(catalogArticle.getByText("TV 2025")).toBeVisible();
+    expect(catalogArticle.getByText("12")).toBeVisible();
     expect(catalogArticle.getByText("8.4")).toBeVisible();
+    const unratedCard = await within(catalog).findByRole("button", {
+      name: "Details for Unrated Catalog Title",
+    });
+    const unratedCardMetadata = unratedCard
+      .closest("article")
+      ?.querySelector(".anime-card-metadata");
+    expect(unratedCardMetadata).toBeEmptyDOMElement();
 
     const popular = homepageSection("Popular picks");
     const popularPick = await popular.findByRole("button", { name: /Popular AniList Pick/ });

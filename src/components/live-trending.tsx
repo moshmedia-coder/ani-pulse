@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Play, Star } from "lucide-react";
+import { ChevronRight, Play, Star, Subtitles } from "lucide-react";
 import { animeTitle, trendingQuery } from "@/lib/anilist";
 
 export function LiveTrending() {
@@ -68,21 +68,11 @@ export function LiveTrending() {
                 </div>
               </div>
             ))
-          : data?.map((m, index) => {
-              const status =
-                m.status === "RELEASING"
-                  ? "airing"
-                  : m.status === "FINISHED"
-                    ? "finished"
-                    : m.status === "NOT_YET_RELEASED"
-                      ? "upcoming"
-                      : null;
-              const episodeInfo =
-                m.episodes != null
-                  ? `${m.episodes} EPS`
-                  : m.nextAiringEpisode
-                    ? `EP ${m.nextAiringEpisode.episode}`
-                    : null;
+          : data?.map((m) => {
+              const format = m.format?.replaceAll("_", " ").trim();
+              const year = m.startDate?.year ?? m.seasonYear;
+              const releaseYear =
+                year != null && Number.isSafeInteger(year) && year > 0 ? year : null;
               const title = animeTitle(m);
 
               return (
@@ -105,35 +95,32 @@ export function LiveTrending() {
                     ) : (
                       <span className="poster-placeholder" aria-hidden="true" />
                     )}
-                    {episodeInfo && (
-                      <span className="poster-tag live-episode-tag">{episodeInfo}</span>
-                    )}
-                    <span className="live-rank">#{index + 1}</span>
                     <span className="poster-play">
                       <Play />
                     </span>
                   </div>
                   <div className="live-card-details">
                     <div className="anime-title live-anime-title">
-                      {status && (
-                        <span
-                          className={`status-dot ${status}`}
-                          role="img"
-                          aria-label={`${status} status`}
-                        />
-                      )}
                       <span title={title}>{title}</span>
                     </div>
                     <div className="metadata live-meta">
-                      {m.format && <span>{m.format.replaceAll("_", " ")}</span>}
-                      {m.seasonYear != null && <span>{m.seasonYear}</span>}
-                      <span>
-                        <Star />
-                        {m.averageScore != null ? (m.averageScore / 10).toFixed(1) : "—"}
-                      </span>
-                      {m.genres.map((genre) => (
-                        <span key={genre}>{genre}</span>
-                      ))}
+                      {(format || releaseYear != null) && (
+                        <span>{[format, releaseYear].filter(Boolean).join(" ")}</span>
+                      )}
+                      {m.episodes != null && Number.isSafeInteger(m.episodes) && m.episodes > 0 && (
+                        <span>
+                          <Subtitles aria-hidden="true" />
+                          {m.episodes}
+                        </span>
+                      )}
+                      {m.averageScore != null &&
+                        Number.isFinite(m.averageScore) &&
+                        m.averageScore > 0 && (
+                          <span>
+                            <Star aria-hidden="true" />
+                            {(m.averageScore / 10).toFixed(1)}
+                          </span>
+                        )}
                     </div>
                   </div>
                 </Link>

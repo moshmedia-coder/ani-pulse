@@ -82,6 +82,7 @@ describe("LiveTrending grid", () => {
         format: null,
         status: null,
         genres: [],
+        nextAiringEpisode: { episode: 5, timeUntilAiring: 3600 },
       },
       ...Array.from({ length: 3 }, (_, index) => ({
         ...media,
@@ -109,10 +110,15 @@ describe("LiveTrending grid", () => {
     });
     expect(longTitleCard).toHaveAttribute("href", "/watch/888888");
     const frierenCard = within(trendingRegion).getByRole("link", { name: "Watch Frieren" });
-    expect(within(frierenCard).getByText("Fantasy")).toBeVisible();
-    expect(within(frierenCard).getByText("Adventure")).toBeVisible();
+    expect(within(frierenCard).getByText("TV 2023")).toBeVisible();
+    expect(within(frierenCard).getByText("28")).toBeVisible();
     expect(within(frierenCard).getByText("9.3")).toBeVisible();
-    expect(within(longTitleCard).getByText("—")).toBeVisible();
+    expect(within(frierenCard).queryByText("Fantasy")).not.toBeInTheDocument();
+    expect(within(frierenCard).queryByText("Adventure")).not.toBeInTheDocument();
+    expect(within(frierenCard).queryByText("#1")).not.toBeInTheDocument();
+    expect(within(frierenCard).queryByText("1")).not.toBeInTheDocument();
+    expect(longTitleCard.querySelector(".live-meta")).toBeEmptyDOMElement();
+    expect(within(longTitleCard).queryByText("EP 5")).not.toBeInTheDocument();
     client.clear();
   });
 });

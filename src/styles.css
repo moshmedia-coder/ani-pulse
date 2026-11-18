@@ -614,17 +614,6 @@
   color: var(--primary);
   fill: var(--overlay);
 }
-.poster-tag {
-  position: absolute;
-  left: 8px;
-  top: 8px;
-  padding: 4px 6px;
-  border-radius: 3px;
-  background: var(--overlay);
-  color: var(--foreground);
-  font-size: 9px;
-  font-weight: 600;
-}
 .anime-title {
   display: flex;
   gap: 7px;
@@ -639,15 +628,11 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.anime-synopsis {
-  display: -webkit-box;
-  margin: 0 0 8px;
-  overflow: hidden;
-  color: var(--muted-foreground);
-  font-size: 10px;
-  line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+.anime-card-metadata {
+  gap: 5px;
+}
+.anime-card-metadata span {
+  white-space: nowrap;
 }
 .resume-badge {
   display: inline-flex;
@@ -1582,23 +1567,6 @@
   width: 100%;
   aspect-ratio: 0.69;
 }
-.live-episode-tag {
-  left: auto;
-  right: 8px;
-  top: 8px;
-}
-.live-rank {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  padding: 4px 6px;
-  border-radius: 3px;
-  background: var(--primary);
-  color: var(--background);
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1;
-}
 .live-card-details {
   min-width: 0;
   padding-top: 2px;
@@ -1606,6 +1574,7 @@
 .live-anime-title {
   align-items: flex-start;
   margin: 10px 0 8px;
+  gap: 0;
 }
 .live-card:hover .anime-title,
 .live-card:focus-visible .anime-title {
