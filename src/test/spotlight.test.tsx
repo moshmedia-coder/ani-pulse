@@ -231,6 +231,7 @@ describe("homepage spotlight", () => {
     expect(hero.getByText("Drama · Mystery")).toBeVisible();
     expect(hero.getByText("2025")).toBeVisible();
     expect(hero.getByText("9.1")).toBeVisible();
+    expect(hero.getByText("24 min")).toBeVisible();
     expect(hero.getByRole("img", { name: "AniList Spotlight" })).toHaveAttribute(
       "src",
       "https://example.test/spotlight-banner.jpg",

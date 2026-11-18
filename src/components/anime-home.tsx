@@ -56,6 +56,7 @@ type SpotlightAnime = {
   score: number | null;
   year: number | null;
   episodes: number | null;
+  duration: number | null;
   genres: string[];
   type: string | null;
   description: string | null;
@@ -85,6 +86,10 @@ function toSpotlightAnime(media: AniListMedia): SpotlightAnime | null {
     episodes:
       media.episodes != null && Number.isSafeInteger(media.episodes) && media.episodes > 0
         ? media.episodes
+        : null,
+    duration:
+      media.duration != null && Number.isSafeInteger(media.duration) && media.duration > 0
+        ? media.duration
         : null,
     genres: media.genres.map((genre) => genre.trim()).filter(Boolean),
     type: media.format?.replaceAll("_", " ") ?? null,
@@ -131,6 +136,7 @@ function Metadata({
           {anime.episodes}
         </span>
       )}
+      {hero && "duration" in anime && anime.duration != null && <span>{anime.duration} min</span>}
       {anime.score != null && (
         <span>
           <Star />
@@ -783,20 +789,24 @@ export function AnimeHome() {
           {current ? (
             <div key={current.id} className={`hero-content ${fading ? "is-fading" : ""}`}>
               <div className="eyebrow">
-                <span className="status-dot" />
-                {liveFeatured.length > 0 ? "FEATURED · ANILIST" : "FEATURED · ANIPULSE CATALOG"}
+                <span className={`status-dot ${current.status}`} />
+                {current.status
+                  ? `${current.status.toUpperCase()} · FEATURED`
+                  : liveFeatured.length > 0
+                    ? "FEATURED · ANILIST"
+                    : "FEATURED · ANIPULSE CATALOG"}
               </div>
               <Metadata anime={current} hero />
               <h1>{current.title}</h1>
               {current.description && <p className="hero-description">{current.description}</p>}
               <div className="hero-actions">
+                <Button variant="outline" onClick={() => selectAnime(current)}>
+                  Details
+                </Button>
                 <Button asChild>
                   <Link to="/watch/$animeId" params={{ animeId: String(current.id) }}>
                     <Play fill="currentColor" /> Watch now
                   </Link>
-                </Button>
-                <Button variant="outline" onClick={() => selectAnime(current)}>
-                  Details
                 </Button>
                 <Button variant="outline" onClick={() => toggleSaved(current.id)}>
                   {saved.includes(current.id) ? <Check /> : <Bookmark />}
