@@ -129,7 +129,7 @@ function Metadata({
     <div className="metadata">
       {anime.type && <span>{anime.type}</span>}
       {anime.year != null && <span>{anime.year}</span>}
-      {(hero || showGenres) && anime.genres.length > 0 && <span>{anime.genres.join(" · ")}</span>}
+      {showGenres && anime.genres.length > 0 && <span>{anime.genres.join(" · ")}</span>}
       {showEpisodes && anime.episodes != null && (
         <span>
           <Subtitles />
@@ -788,14 +788,6 @@ export function AnimeHome() {
           </div>
           {current ? (
             <div key={current.id} className={`hero-content ${fading ? "is-fading" : ""}`}>
-              <div className="eyebrow">
-                <span className={`status-dot ${current.status}`} />
-                {current.status
-                  ? `${current.status.toUpperCase()} · FEATURED`
-                  : liveFeatured.length > 0
-                    ? "FEATURED · ANILIST"
-                    : "FEATURED · ANIPULSE CATALOG"}
-              </div>
               <Metadata anime={current} hero />
               <h1>{current.title}</h1>
               {current.description && <p className="hero-description">{current.description}</p>}

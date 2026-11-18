@@ -218,6 +218,7 @@ describe("homepage spotlight", () => {
         id: 901,
         idMal: 888889,
         title: { english: "Second Spotlight", romaji: "Second Spotlight" },
+        status: "RELEASING",
       }),
     ]);
 
@@ -228,7 +229,8 @@ describe("homepage spotlight", () => {
       expect(hero.getByRole("heading", { level: 1, name: "AniList Spotlight" })).toBeVisible(),
     );
     expect(hero.getByText("A real AniList synopsis.")).toBeVisible();
-    expect(hero.getByText("Drama · Mystery")).toBeVisible();
+    expect(hero.queryByText("FINISHED · FEATURED")).not.toBeInTheDocument();
+    expect(hero.queryByText("Drama · Mystery")).not.toBeInTheDocument();
     expect(hero.getByText("2025")).toBeVisible();
     expect(hero.getByText("9.1")).toBeVisible();
     expect(hero.getByText("24 min")).toBeVisible();
@@ -241,6 +243,9 @@ describe("homepage spotlight", () => {
 
     fireEvent.click(hero.getByRole("button", { name: "Next featured anime" }));
     expect(hero.getByRole("heading", { level: 1, name: "Second Spotlight" })).toBeVisible();
+    expect(hero.queryByText("AIRING · FEATURED")).not.toBeInTheDocument();
+    fireEvent.click(hero.getByRole("button", { name: "Details" }));
+    expect(await screen.findByText("Drama · Mystery")).toBeVisible();
     client.clear();
   }, 15000);
 
